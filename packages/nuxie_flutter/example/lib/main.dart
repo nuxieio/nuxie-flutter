@@ -8,7 +8,12 @@ void main() {
 }
 
 class ExampleApp extends StatelessWidget {
-  const ExampleApp({super.key});
+  const ExampleApp({
+    super.key,
+    this.platformOverride,
+  });
+
+  final NuxieFlutterPlatform? platformOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -17,13 +22,20 @@ class ExampleApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
       ),
-      home: const ExampleHomePage(),
+      home: ExampleHomePage(
+        platformOverride: platformOverride,
+      ),
     );
   }
 }
 
 class ExampleHomePage extends StatefulWidget {
-  const ExampleHomePage({super.key});
+  const ExampleHomePage({
+    super.key,
+    this.platformOverride,
+  });
+
+  final NuxieFlutterPlatform? platformOverride;
 
   @override
   State<ExampleHomePage> createState() => _ExampleHomePageState();
@@ -45,6 +57,7 @@ class _ExampleHomePageState extends State<ExampleHomePage>
 
   @override
   void dispose() {
+    unawaited(_nuxie?.shutdown());
     _apiKeyController.dispose();
     _userIdController.dispose();
     _flowIdController.dispose();
@@ -75,17 +88,22 @@ class _ExampleHomePageState extends State<ExampleHomePage>
       return;
     }
 
-    final nuxie = await Nuxie.initialize(
-      apiKey: apiKey,
-      purchaseController: this,
-      options: const NuxieOptions(environment: NuxieEnvironment.staging),
-    );
+    try {
+      final nuxie = await Nuxie.initialize(
+        apiKey: apiKey,
+        purchaseController: this,
+        options: const NuxieOptions(environment: NuxieEnvironment.staging),
+        platformOverride: widget.platformOverride,
+      );
 
-    setState(() {
-      _nuxie = nuxie;
-    });
+      setState(() {
+        _nuxie = nuxie;
+      });
 
-    _addLog('initialized sdk version=${nuxie.sdkVersion}');
+      _addLog('initialized sdk version=${nuxie.sdkVersion}');
+    } catch (error) {
+      _addLog('initialize failed: $error');
+    }
   }
 
   Future<void> _identify() async {
@@ -95,11 +113,15 @@ class _ExampleHomePageState extends State<ExampleHomePage>
       return;
     }
 
-    await nuxie.identify(
-      _userIdController.text.trim(),
-      userProperties: const <String, Object?>{'plan': 'pro'},
-    );
-    _addLog('identify sent');
+    try {
+      await nuxie.identify(
+        _userIdController.text.trim(),
+        userProperties: const <String, Object?>{'plan': 'pro'},
+      );
+      _addLog('identify sent');
+    } catch (error) {
+      _addLog('identify failed: $error');
+    }
   }
 
   Future<void> _trigger() async {
@@ -109,15 +131,19 @@ class _ExampleHomePageState extends State<ExampleHomePage>
       return;
     }
 
-    await _triggerSubscription?.cancel();
+    try {
+      await _triggerSubscription?.cancel();
 
-    final op = nuxie.trigger('paywall_tapped');
-    _triggerSubscription = op.updates.listen((update) {
-      _addLog('trigger update: ${update.kind} terminal=${update.isTerminal}');
-    });
+      final op = nuxie.trigger('paywall_tapped');
+      _triggerSubscription = op.updates.listen((update) {
+        _addLog('trigger update: ${update.kind} terminal=${update.isTerminal}');
+      });
 
-    final terminal = await op.done;
-    _addLog('trigger done: ${terminal.kind}');
+      final terminal = await op.done;
+      _addLog('trigger done: ${terminal.kind}');
+    } catch (error) {
+      _addLog('trigger failed: $error');
+    }
   }
 
   Future<void> _triggerOnce() async {
@@ -127,11 +153,15 @@ class _ExampleHomePageState extends State<ExampleHomePage>
       return;
     }
 
-    final terminal = await nuxie.triggerOnce(
-      'paywall_tapped',
-      timeout: const Duration(seconds: 10),
-    );
-    _addLog('triggerOnce terminal: ${terminal.kind}');
+    try {
+      final terminal = await nuxie.triggerOnce(
+        'paywall_tapped',
+        timeout: const Duration(seconds: 10),
+      );
+      _addLog('triggerOnce terminal: ${terminal.kind}');
+    } catch (error) {
+      _addLog('triggerOnce failed: $error');
+    }
   }
 
   Future<void> _showFlow() async {
@@ -141,8 +171,12 @@ class _ExampleHomePageState extends State<ExampleHomePage>
       return;
     }
 
-    await nuxie.showFlow(_flowIdController.text.trim());
-    _addLog('showFlow called');
+    try {
+      await nuxie.showFlow(_flowIdController.text.trim());
+      _addLog('showFlow called');
+    } catch (error) {
+      _addLog('showFlow failed: $error');
+    }
   }
 
   Future<void> _hasFeature() async {
@@ -152,8 +186,61 @@ class _ExampleHomePageState extends State<ExampleHomePage>
       return;
     }
 
-    final access = await nuxie.hasFeature('premium_feature');
-    _addLog('feature allowed=${access.allowed} balance=${access.balance}');
+    try {
+      final access = await nuxie.hasFeature('premium_feature');
+      _addLog('feature allowed=${access.allowed} balance=${access.balance}');
+    } catch (error) {
+      _addLog('hasFeature failed: $error');
+    }
+  }
+
+  Future<void> _runSanityCheck() async {
+    _addLog('sanity: starting');
+    if (_nuxie == null) {
+      await _initialize();
+    }
+    final nuxie = _nuxie;
+    if (nuxie == null) {
+      _addLog('sanity: failed to initialize');
+      return;
+    }
+
+    try {
+      await nuxie.identify(
+        _userIdController.text.trim(),
+        userProperties: const <String, Object?>{'source': 'example'},
+      );
+      final distinctId = await nuxie.getDistinctId();
+      final anonymousId = await nuxie.getAnonymousId();
+      final isIdentified = await nuxie.getIsIdentified();
+
+      final terminal = await nuxie.triggerOnce(
+        'example_sanity_check',
+        timeout: const Duration(seconds: 3),
+      );
+
+      final access = await nuxie.hasFeature('premium_feature');
+      final usage = await nuxie.useFeatureAndWait(
+        'premium_feature',
+        amount: 1,
+      );
+      final queuedCount = await nuxie.getQueuedEventCount();
+      final flushed = await nuxie.flushEvents();
+
+      _addLog(
+        'sanity: identity distinct=$distinctId anon=$anonymousId identified=$isIdentified',
+      );
+      _addLog('sanity: trigger terminal=${terminal.kind}');
+      _addLog(
+        'sanity: feature allowed=${access.allowed} balance=${access.balance}',
+      );
+      _addLog(
+          'sanity: usage success=${usage.success} amount=${usage.amountUsed}');
+      _addLog('sanity: queue count=$queuedCount flushed=$flushed');
+      _addLog('sanity: passed');
+    } catch (error) {
+      _addLog('sanity: failed $error');
+    }
   }
 
   void _addLog(String value) {
@@ -211,6 +298,10 @@ class _ExampleHomePageState extends State<ExampleHomePage>
                 ElevatedButton(
                   onPressed: _hasFeature,
                   child: const Text('Has Feature'),
+                ),
+                ElevatedButton(
+                  onPressed: _runSanityCheck,
+                  child: const Text('Run Sanity Check'),
                 ),
               ],
             ),
