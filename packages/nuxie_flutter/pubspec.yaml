@@ -1,0 +1,21 @@
+name: nuxie_flutter
+description: Flutter SDK for Nuxie.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: '>=3.19.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  nuxie_flutter_platform_interface:
+    path: ../nuxie_flutter_platform_interface
+  nuxie_flutter_native:
+    path: ../nuxie_flutter_native
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

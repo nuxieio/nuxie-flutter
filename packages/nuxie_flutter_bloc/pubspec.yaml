@@ -1,0 +1,15 @@
+name: nuxie_flutter_bloc
+description: Optional Bloc adapters for nuxie_flutter.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  bloc: ^9.0.0
+  nuxie_flutter:
+    path: ../nuxie_flutter
+
+dev_dependencies:
+  lints: ^6.0.0
