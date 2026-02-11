@@ -1,0 +1,10 @@
+rootProject.name = 'nuxie_flutter_native'
+
+def localNuxieRoot = file('../../../../nuxie-android')
+if (localNuxieRoot.exists()) {
+    include(':nuxie-core')
+    project(':nuxie-core').projectDir = file('../../../../nuxie-android/nuxie-core')
+
+    include(':nuxie-android')
+    project(':nuxie-android').projectDir = file('../../../../nuxie-android/nuxie-android')
+}

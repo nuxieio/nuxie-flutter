@@ -9,9 +9,9 @@ Native iOS implementation for nuxie_flutter.
   s.license          = { :type => 'MIT', :file => '../LICENSE' }
   s.author           = { 'Nuxie' => 'support@nuxie.io' }
   s.source           = { :path => '.' }
-  s.source_files = '../Classes/**/*'
-  s.dependency 'Flutter'
-  s.platform = :ios, '15.0'
-  s.swift_version = '5.9'
+  s.source_files     = 'nuxie_flutter_native/Sources/nuxie_flutter_native/**/*'
+  s.dependency       'Flutter'
+  s.platform         = :ios, '15.0'
+  s.swift_version    = '5.9'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
 end

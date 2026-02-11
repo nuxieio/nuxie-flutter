@@ -8,15 +8,15 @@ import 'package:pigeon/pigeon.dart';
     kotlinOut:
         'android/src/main/kotlin/io/nuxie/flutter/nativeplugin/NuxieBridge.g.kt',
     kotlinOptions: KotlinOptions(package: 'io.nuxie.flutter.nativeplugin'),
-    swiftOut: 'ios/Classes/NuxieBridge.g.swift',
+    swiftOut: 'ios/nuxie_flutter_native/Sources/nuxie_flutter_native/NuxieBridge.g.swift',
     swiftOptions: SwiftOptions(),
   ),
 )
 class PConfigureRequest {
-  String apiKey = '';
-  String wrapperVersion = '';
-  bool usingPurchaseController = false;
-  String environment = 'production';
+  String? apiKey;
+  String? wrapperVersion;
+  bool? usingPurchaseController;
+  String? environment;
   String? apiEndpoint;
   String? logLevel;
   bool? enableConsoleLogging;
@@ -38,47 +38,48 @@ class PConfigureRequest {
   int? flowCacheExpirationSeconds;
   int? maxConcurrentFlowDownloads;
   int? flowDownloadTimeoutSeconds;
+  int? purchaseTimeoutSeconds;
 }
 
 class PTriggerRequest {
-  String requestId = '';
-  String event = '';
+  String? requestId;
+  String? event;
   Map<String?, Object?>? properties;
   Map<String?, Object?>? userProperties;
   Map<String?, Object?>? userPropertiesSetOnce;
 }
 
 class PTriggerUpdate {
-  String requestId = '';
-  String updateKind = '';
-  Map<String?, Object?> payload = <String?, Object?>{};
-  bool isTerminal = false;
-  int timestampMs = 0;
+  String? requestId;
+  String? updateKind;
+  Map<String?, Object?>? payload;
+  bool? isTerminal;
+  int? timestampMs;
 }
 
 class PFeatureAccess {
-  bool allowed = false;
-  bool unlimited = false;
+  bool? allowed;
+  bool? unlimited;
   int? balance;
-  String type = 'boolean';
+  String? type;
 }
 
 class PFeatureCheckResult {
-  String customerId = '';
-  String featureId = '';
-  int requiredBalance = 1;
-  String code = '';
-  bool allowed = false;
-  bool unlimited = false;
+  String? customerId;
+  String? featureId;
+  int? requiredBalance;
+  String? code;
+  bool? allowed;
+  bool? unlimited;
   int? balance;
-  String type = 'boolean';
+  String? type;
   Object? preview;
 }
 
 class PFeatureUsageResult {
-  bool success = false;
-  String featureId = '';
-  double amountUsed = 0;
+  bool? success;
+  String? featureId;
+  double? amountUsed;
   String? message;
   double? usageCurrent;
   double? usageLimit;
@@ -86,51 +87,52 @@ class PFeatureUsageResult {
 }
 
 class PProfileResponse {
-  Map<String?, Object?> raw = <String?, Object?>{};
+  Map<String?, Object?>? raw;
 }
 
 class PFeatureAccessChangedEvent {
-  String featureId = '';
+  String? featureId;
   PFeatureAccess? from;
-  PFeatureAccess to = PFeatureAccess();
-  int timestampMs = 0;
+  PFeatureAccess? to;
+  int? timestampMs;
 }
 
 class PFlowLifecycleEvent {
-  String type = '';
+  String? type;
   String? flowId;
   String? reason;
-  int timestampMs = 0;
+  int? timestampMs;
+  Map<String?, Object?>? payload;
 }
 
 class PLogEvent {
-  String level = '';
-  String message = '';
+  String? level;
+  String? message;
   String? scope;
-  int timestampMs = 0;
+  int? timestampMs;
 }
 
 class PPurchaseRequest {
-  String requestId = '';
-  String platform = '';
-  String productId = '';
+  String? requestId;
+  String? platform;
+  String? productId;
   String? basePlanId;
   String? offerId;
   String? displayName;
   String? displayPrice;
   double? price;
   String? currencyCode;
-  int timestampMs = 0;
+  int? timestampMs;
 }
 
 class PRestoreRequest {
-  String requestId = '';
-  String platform = '';
-  int timestampMs = 0;
+  String? requestId;
+  String? platform;
+  int? timestampMs;
 }
 
 class PPurchaseResult {
-  String type = '';
+  String? type;
   String? message;
   String? productId;
   String? purchaseToken;
@@ -141,7 +143,7 @@ class PPurchaseResult {
 }
 
 class PRestoreResult {
-  String type = '';
+  String? type;
   int? restoredCount;
   String? message;
 }
@@ -187,22 +189,35 @@ abstract class PNuxieHostApi {
 
   @async
   PFeatureAccess hasFeature(
-      String featureId, int? requiredBalance, String? entityId);
+    String featureId,
+    int? requiredBalance,
+    String? entityId,
+  );
 
   @async
   PFeatureAccess? getCachedFeature(String featureId, String? entityId);
 
   @async
   PFeatureCheckResult checkFeature(
-      String featureId, int? requiredBalance, String? entityId);
+    String featureId,
+    int? requiredBalance,
+    String? entityId,
+  );
 
   @async
   PFeatureCheckResult refreshFeature(
-      String featureId, int? requiredBalance, String? entityId);
+    String featureId,
+    int? requiredBalance,
+    String? entityId,
+  );
 
   @async
-  void useFeature(String featureId, double amount, String? entityId,
-      Map<String?, Object?>? metadata);
+  void useFeature(
+    String featureId,
+    double amount,
+    String? entityId,
+    Map<String?, Object?>? metadata,
+  );
 
   @async
   PFeatureUsageResult useFeatureAndWait(

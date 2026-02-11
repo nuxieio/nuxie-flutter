@@ -9,12 +9,20 @@ let package = Package(
   products: [
     .library(name: "nuxie_flutter_native", targets: ["nuxie_flutter_native"])
   ],
-  dependencies: [],
+  dependencies: [
+    .package(url: "https://github.com/nuxieio/nuxie-ios.git", branch: "main")
+  ],
   targets: [
     .target(
       name: "nuxie_flutter_native",
-      dependencies: [],
-      path: "Sources/nuxie_flutter_native"
+      dependencies: [
+        .product(name: "Nuxie", package: "nuxie-ios")
+      ],
+      path: "Sources/nuxie_flutter_native",
+      sources: [
+        "NuxieBridge.g.swift",
+        "NuxieFlutterNativePlugin.swift"
+      ]
     )
   ]
 )
