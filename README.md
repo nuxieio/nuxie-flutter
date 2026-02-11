@@ -100,6 +100,8 @@ const NuxieFlowView(flowId: 'flow_123');
 - CocoaPods: supported via `packages/nuxie_flutter_native/ios/nuxie_flutter_native.podspec`
 - Swift Package Manager: supported via `packages/nuxie_flutter_native/ios/nuxie_flutter_native/Package.swift`
 
+For CocoaPods app projects, ensure the native `Nuxie` iOS SDK module is linked in the host app (for example via Xcode Swift Package dependencies) so the bridge can import `Nuxie`.
+
 ## Development
 
 From repo root:
