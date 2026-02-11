@@ -43,6 +43,7 @@ class NuxieOptions {
     this.flowCacheExpirationSeconds,
     this.maxConcurrentFlowDownloads,
     this.flowDownloadTimeoutSeconds,
+    this.purchaseTimeoutSeconds,
   });
 
   final NuxieEnvironment environment;
@@ -67,4 +68,5 @@ class NuxieOptions {
   final int? flowCacheExpirationSeconds;
   final int? maxConcurrentFlowDownloads;
   final int? flowDownloadTimeoutSeconds;
+  final int? purchaseTimeoutSeconds;
 }

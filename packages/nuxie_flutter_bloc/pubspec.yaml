@@ -5,11 +5,17 @@ publish_to: none
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
+  flutter: '>=3.19.0'
 
 dependencies:
+  flutter:
+    sdk: flutter
   bloc: ^9.0.0
   nuxie_flutter:
     path: ../nuxie_flutter
 
 dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  bloc_test: ^10.0.0
   lints: ^6.0.0

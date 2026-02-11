@@ -35,12 +35,14 @@ class NuxieFlowLifecycleEvent {
     this.flowId,
     this.reason,
     this.timestampMs,
+    this.payload,
   });
 
   final String type;
   final String? flowId;
   final String? reason;
   final int? timestampMs;
+  final Map<String, Object?>? payload;
 }
 
 class NuxieLogEvent {

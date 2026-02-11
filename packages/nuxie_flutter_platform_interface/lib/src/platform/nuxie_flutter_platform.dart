@@ -30,6 +30,10 @@ abstract class NuxieFlutterPlatform extends PlatformInterface {
 
   Stream<NuxieTriggerUpdateEvent> get triggerUpdates;
 
+  Stream<NuxiePurchaseRequest> get purchaseRequests;
+
+  Stream<NuxieRestoreRequest> get restoreRequests;
+
   Future<void> configure({
     required String apiKey,
     NuxieOptions? options,
@@ -149,6 +153,14 @@ class _UnsupportedNuxieFlutterPlatform extends NuxieFlutterPlatform {
       const Stream<NuxieTriggerUpdateEvent>.empty();
 
   @override
+  Stream<NuxiePurchaseRequest> get purchaseRequests =>
+      const Stream<NuxiePurchaseRequest>.empty();
+
+  @override
+  Stream<NuxieRestoreRequest> get restoreRequests =>
+      const Stream<NuxieRestoreRequest>.empty();
+
+  @override
   Future<void> cancelTrigger(String requestId) async => _unimplemented();
 
   @override
@@ -161,12 +173,16 @@ class _UnsupportedNuxieFlutterPlatform extends NuxieFlutterPlatform {
 
   @override
   Future<void> completePurchase(
-          String requestId, NuxiePurchaseResult result) async =>
+    String requestId,
+    NuxiePurchaseResult result,
+  ) async =>
       _unimplemented();
 
   @override
   Future<void> completeRestore(
-          String requestId, NuxieRestoreResult result) async =>
+    String requestId,
+    NuxieRestoreResult result,
+  ) async =>
       _unimplemented();
 
   @override
