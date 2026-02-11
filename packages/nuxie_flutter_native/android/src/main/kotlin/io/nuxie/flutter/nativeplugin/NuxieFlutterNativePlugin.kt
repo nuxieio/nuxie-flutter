@@ -55,6 +55,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.longOrNull
 
 class NuxieFlutterNativePlugin :
   FlutterPlugin,
@@ -1019,7 +1022,8 @@ private fun isTerminalEntitlement(update: EntitlementUpdate): Boolean {
 
 private fun ProfileResponse.toPProfileResponse(): PProfileResponse {
   val element = Json.encodeToJsonElement(ProfileResponse.serializer(), this)
-  return PProfileResponse(raw = element.toBridgeMap())
+  val raw = (element as? JsonObject)?.toBridgeMap() ?: emptyMap()
+  return PProfileResponse(raw = raw)
 }
 
 private fun FeatureAccess.toPFeatureAccess(): PFeatureAccess {
@@ -1085,7 +1089,7 @@ private fun PPurchaseResult.toPurchaseOutcome(defaultProductId: String): Purchas
 
 private fun PRestoreResult.toRestoreResult(): RestoreResult {
   return when (type) {
-    "success" -> RestoreResult.Success(restoredCount ?: 0)
+    "success" -> RestoreResult.Success((restoredCount ?: 0L).toInt())
     "no_purchases" -> RestoreResult.NoPurchases
     else -> RestoreResult.Failed(message ?: "restore_failed")
   }

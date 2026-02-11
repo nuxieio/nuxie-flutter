@@ -1,6 +1,25 @@
 group = "io.nuxie.flutter.nativeplugin"
 version = "1.0-SNAPSHOT"
 
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader("UTF-8") { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterSdkPath = localProperties.getProperty("flutter.sdk") ?: System.getenv("FLUTTER_ROOT")
+def flutterJarCandidates = []
+if (flutterSdkPath != null) {
+    ["android-arm64", "android-arm", "android-x64"].each { arch ->
+        def flutterJar = file("${flutterSdkPath}/bin/cache/artifacts/engine/${arch}/flutter.jar")
+        if (flutterJar.exists()) {
+            flutterJarCandidates.add(flutterJar)
+        }
+    }
+}
+
 buildscript {
     ext.kotlin_version = "2.0.21"
     repositories {
@@ -48,6 +67,10 @@ android {
 }
 
 dependencies {
+    if (!flutterJarCandidates.isEmpty()) {
+        compileOnly(files(flutterJarCandidates))
+    }
+
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
