@@ -29,6 +29,7 @@ enum GateSourceKind {
 
 enum JourneyExitReasonKind {
   completed,
+  dismissed,
   goalMet,
   triggerUnmatched,
   expired,

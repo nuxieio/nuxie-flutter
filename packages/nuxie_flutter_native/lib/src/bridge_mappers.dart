@@ -451,6 +451,8 @@ GateSourceKind _gateSourceFromBridge(String? source) {
 
 JourneyExitReasonKind _journeyExitReasonFromBridge(String? reason) {
   switch (reason) {
+    case 'dismissed':
+      return JourneyExitReasonKind.dismissed;
     case 'goal_met':
       return JourneyExitReasonKind.goalMet;
     case 'trigger_unmatched':
