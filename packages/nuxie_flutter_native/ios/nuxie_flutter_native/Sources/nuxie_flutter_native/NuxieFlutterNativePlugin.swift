@@ -971,6 +971,8 @@ private extension JourneyExitReason {
     switch self {
     case .completed:
       return "completed"
+    case .dismissed:
+      return "dismissed"
     case .goalMet:
       return "goal_met"
     case .triggerUnmatched:

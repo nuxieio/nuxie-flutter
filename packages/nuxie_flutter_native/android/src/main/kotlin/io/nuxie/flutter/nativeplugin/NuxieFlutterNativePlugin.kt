@@ -982,6 +982,7 @@ private fun JourneyUpdate.toJourneyPayload(): Map<String?, Any?> {
 private fun JourneyExitReason.toBridgeExitReason(): String {
   return when (this) {
     JourneyExitReason.COMPLETED -> "completed"
+    JourneyExitReason.DISMISSED -> "dismissed"
     JourneyExitReason.GOAL_MET -> "goal_met"
     JourneyExitReason.TRIGGER_UNMATCHED -> "trigger_unmatched"
     JourneyExitReason.EXPIRED -> "expired"
