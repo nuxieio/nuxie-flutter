@@ -1,10 +1,12 @@
 package io.nuxie.flutter.nativeplugin
 
 import android.content.Context
+import android.view.Gravity
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -778,6 +780,11 @@ class NuxieFlutterNativePlugin :
               // Ignore load failures; host can still present via showFlow.
             }
           }
+        } else {
+          showConfigurationError(
+            context,
+            "NuxieFlowView on Android requires FlutterFragmentActivity or another ComponentActivity host.",
+          )
         }
       }
     }
@@ -786,6 +793,21 @@ class NuxieFlutterNativePlugin :
 
     override fun dispose() {
       container.removeAllViews()
+    }
+
+    private fun showConfigurationError(context: Context, message: String) {
+      container.removeAllViews()
+      val textView = TextView(context).apply {
+        text = message
+        gravity = Gravity.CENTER
+      }
+      container.addView(
+        textView,
+        FrameLayout.LayoutParams(
+          FrameLayout.LayoutParams.MATCH_PARENT,
+          FrameLayout.LayoutParams.MATCH_PARENT,
+        ),
+      )
     }
   }
 }

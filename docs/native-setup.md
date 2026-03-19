@@ -99,17 +99,18 @@ need native declarations when flows use permission actions.
 
 Add the permissions your authored flows need:
 
+- `request_notifications` -> `android.permission.POST_NOTIFICATIONS`
 - `request_permission("camera")` -> `android.permission.CAMERA`
 - `request_permission("microphone")` -> `android.permission.RECORD_AUDIO`
 - `request_permission("photos")` -> `android.permission.READ_MEDIA_IMAGES`
-  on Android 13+ or `android.permission.READ_EXTERNAL_STORAGE` on Android 12
-  and below
+  on Android 13+ and `android.permission.READ_EXTERNAL_STORAGE`
+  (`maxSdkVersion="32"`) when you support Android 12 and below
 - `request_permission("location")` -> `android.permission.ACCESS_COARSE_LOCATION`
   and/or `android.permission.ACCESS_FINE_LOCATION`
 
 `request_notifications` uses the native SDK-managed notification permission
-path. `request_tracking` is iOS-only and should not be authored for Android
-targets.
+path after the host app declares `POST_NOTIFICATIONS`. `request_tracking` is
+iOS-only and should not be authored for Android targets.
 
 ## Bridge Contract
 
