@@ -16,12 +16,24 @@ Supported package manager paths:
 - iOS deployment target `15.0+`
 - Native `Nuxie` module must be linked in the app build
 - Flutter plugin integration should include generated plugin registration
+- If your flows use native permission actions, add the required usage
+  descriptions to the host app `Info.plist`
 
 ### Notes
 
 - CocoaPods remains supported.
 - SPM is also supported.
 - If you see `No such module 'Nuxie'`, verify native dependency linkage in the host app.
+
+### iOS permission action keys
+
+Add only the keys that match the flow actions you author:
+
+- `NSUserTrackingUsageDescription` for `request_tracking`
+- `NSCameraUsageDescription` for `request_permission("camera")`
+- `NSMicrophoneUsageDescription` for `request_permission("microphone")`
+- `NSPhotoLibraryUsageDescription` for `request_permission("photos")`
+- `NSLocationWhenInUseUsageDescription` for `request_permission("location")`
 
 ## Android
 
@@ -30,6 +42,8 @@ Supported package manager paths:
 - Java 17
 - Android SDK installed and configured
 - `minSdk 21`
+- `NuxieFlowView` hosts should use `FlutterFragmentActivity` or another
+  `ComponentActivity` subclass
 
 ### SDK setup (example)
 
@@ -77,6 +91,26 @@ flutter.sdk=/path/to/flutter
 
 See [`troubleshooting.md`](troubleshooting.md) for the most common local
 Android setup failures.
+
+### Android permission action declarations
+
+`showFlow(...)` works without extra wrapper code changes, but host apps still
+need native declarations when flows use permission actions.
+
+Add the permissions your authored flows need:
+
+- `request_notifications` -> `android.permission.POST_NOTIFICATIONS`
+- `request_permission("camera")` -> `android.permission.CAMERA`
+- `request_permission("microphone")` -> `android.permission.RECORD_AUDIO`
+- `request_permission("photos")` -> `android.permission.READ_MEDIA_IMAGES`
+  on Android 13+ and `android.permission.READ_EXTERNAL_STORAGE`
+  (`maxSdkVersion="32"`) when you support Android 12 and below
+- `request_permission("location")` -> `android.permission.ACCESS_COARSE_LOCATION`
+  and/or `android.permission.ACCESS_FINE_LOCATION`
+
+`request_notifications` uses the native SDK-managed notification permission
+path after the host app declares `POST_NOTIFICATIONS`. `request_tracking` is
+iOS-only and should not be authored for Android targets.
 
 ## Bridge Contract
 

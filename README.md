@@ -96,7 +96,9 @@ if (terminal is TriggerDecisionUpdate) {
 - `trigger(...)`: progressive stream (`updates`) + terminal future (`done`).
 - `triggerOnce(...)`: convenience terminal-only trigger API.
 - `showFlow(flowId)`: native full-screen flow presentation.
-- `NuxieFlowView`: embedded native flow view for custom layouts.
+- `NuxieFlowView`: embedded native flow view for custom layouts. On Android,
+  host it from `FlutterFragmentActivity` / another `ComponentActivity`
+  subclass.
 - `NuxiePurchaseController`: Dart purchase/restore bridge for flow purchase actions.
 - `NuxieFeatureBuilder`: widget helper for feature gating in UI trees.
 
@@ -133,6 +135,8 @@ class MyPurchaseController implements NuxiePurchaseController {
 
 - iOS CocoaPods support: `packages/nuxie_flutter_native/ios/nuxie_flutter_native.podspec`
 - iOS SPM support: `packages/nuxie_flutter_native/ios/nuxie_flutter_native/Package.swift`
+- If your flows use native permission actions, the host app still needs the
+  corresponding iOS usage-description keys and Android manifest permissions.
 - Android plugin validation can be run with:
 
 ```bash

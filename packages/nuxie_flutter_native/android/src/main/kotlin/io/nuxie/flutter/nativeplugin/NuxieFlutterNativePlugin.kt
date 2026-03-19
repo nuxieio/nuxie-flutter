@@ -1,11 +1,13 @@
 package io.nuxie.flutter.nativeplugin
 
-import android.app.Activity
 import android.content.Context
+import android.view.Gravity
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.TextView
+import androidx.activity.ComponentActivity
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -77,7 +79,7 @@ class NuxieFlutterNativePlugin :
   }
 
   private lateinit var applicationContext: Context
-  private var activity: Activity? = null
+  private var activity: ComponentActivity? = null
   private var flutterApi: PNuxieFlutterApi? = null
 
   private var purchaseTimeoutMs: Long = 60_000L
@@ -105,7 +107,7 @@ class NuxieFlutterNativePlugin :
   }
 
   override fun onAttachedToActivity(binding: ActivityPluginBinding) {
-    activity = binding.activity
+    activity = binding.activity as? ComponentActivity
   }
 
   override fun onDetachedFromActivityForConfigChanges() {
@@ -113,7 +115,7 @@ class NuxieFlutterNativePlugin :
   }
 
   override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
-    activity = binding.activity
+    activity = binding.activity as? ComponentActivity
   }
 
   override fun onDetachedFromActivity() {
@@ -745,13 +747,14 @@ class NuxieFlutterNativePlugin :
 
     override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
       val flowId = (args as? Map<*, *>)?.get("flowId") as? String
-      return NuxieFlowPlatformView(context, plugin, flowId)
+      return NuxieFlowPlatformView(context, plugin, viewId, flowId)
     }
   }
 
   private class NuxieFlowPlatformView(
     context: Context,
     private val plugin: NuxieFlutterNativePlugin,
+    private val viewId: Int,
     flowId: String?,
   ) : PlatformView {
     private val container = FrameLayout(context)
@@ -762,7 +765,7 @@ class NuxieFlutterNativePlugin :
         if (activity != null) {
           plugin.scope.launch {
             runCatching {
-              val flowView = plugin.sdk.getFlowView(activity, flowId)
+              val flowView = plugin.sdk.getFlowView(activity, flowId, viewId)
               withContext(Dispatchers.Main.immediate) {
                 container.removeAllViews()
                 container.addView(
@@ -777,6 +780,11 @@ class NuxieFlutterNativePlugin :
               // Ignore load failures; host can still present via showFlow.
             }
           }
+        } else {
+          showConfigurationError(
+            context,
+            "NuxieFlowView on Android requires FlutterFragmentActivity or another ComponentActivity host.",
+          )
         }
       }
     }
@@ -785,6 +793,21 @@ class NuxieFlutterNativePlugin :
 
     override fun dispose() {
       container.removeAllViews()
+    }
+
+    private fun showConfigurationError(context: Context, message: String) {
+      container.removeAllViews()
+      val textView = TextView(context).apply {
+        text = message
+        gravity = Gravity.CENTER
+      }
+      container.addView(
+        textView,
+        FrameLayout.LayoutParams(
+          FrameLayout.LayoutParams.MATCH_PARENT,
+          FrameLayout.LayoutParams.MATCH_PARENT,
+        ),
+      )
     }
   }
 }
