@@ -84,6 +84,8 @@ This export also re-exports all shared model/event classes from
     `featureAccessChanges`.
 - `NuxieFlowView`
   - Embedded native flow view for iOS/Android.
+  - On Android, the host activity must be a `ComponentActivity` (for Flutter
+    apps, this typically means `FlutterFragmentActivity`).
   - For unsupported targets, renders provided `placeholder` (or default text).
 
 ## Trigger Models

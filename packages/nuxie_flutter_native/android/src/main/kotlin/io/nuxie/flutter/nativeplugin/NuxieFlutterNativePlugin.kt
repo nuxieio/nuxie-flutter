@@ -1,11 +1,11 @@
 package io.nuxie.flutter.nativeplugin
 
-import android.app.Activity
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.FrameLayout
+import androidx.activity.ComponentActivity
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -77,7 +77,7 @@ class NuxieFlutterNativePlugin :
   }
 
   private lateinit var applicationContext: Context
-  private var activity: Activity? = null
+  private var activity: ComponentActivity? = null
   private var flutterApi: PNuxieFlutterApi? = null
 
   private var purchaseTimeoutMs: Long = 60_000L
@@ -105,7 +105,7 @@ class NuxieFlutterNativePlugin :
   }
 
   override fun onAttachedToActivity(binding: ActivityPluginBinding) {
-    activity = binding.activity
+    activity = binding.activity as? ComponentActivity
   }
 
   override fun onDetachedFromActivityForConfigChanges() {
@@ -113,7 +113,7 @@ class NuxieFlutterNativePlugin :
   }
 
   override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
-    activity = binding.activity
+    activity = binding.activity as? ComponentActivity
   }
 
   override fun onDetachedFromActivity() {
@@ -745,13 +745,14 @@ class NuxieFlutterNativePlugin :
 
     override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
       val flowId = (args as? Map<*, *>)?.get("flowId") as? String
-      return NuxieFlowPlatformView(context, plugin, flowId)
+      return NuxieFlowPlatformView(context, plugin, viewId, flowId)
     }
   }
 
   private class NuxieFlowPlatformView(
     context: Context,
     private val plugin: NuxieFlutterNativePlugin,
+    private val viewId: Int,
     flowId: String?,
   ) : PlatformView {
     private val container = FrameLayout(context)
@@ -762,7 +763,7 @@ class NuxieFlutterNativePlugin :
         if (activity != null) {
           plugin.scope.launch {
             runCatching {
-              val flowView = plugin.sdk.getFlowView(activity, flowId)
+              val flowView = plugin.sdk.getFlowView(activity, flowId, viewId)
               withContext(Dispatchers.Main.immediate) {
                 container.removeAllViews()
                 container.addView(
