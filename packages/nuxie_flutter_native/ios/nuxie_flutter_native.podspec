@@ -5,9 +5,9 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
 Native iOS implementation for nuxie_flutter.
                        DESC
-  s.homepage         = 'https://github.com/nuxieio/nuxie-flutter'
+  s.homepage         = 'https://github.com/nuxieai/nuxie-flutter'
   s.license          = { :type => 'MIT', :file => '../LICENSE' }
-  s.author           = { 'Nuxie' => 'support@nuxie.io' }
+  s.author           = { 'Nuxie' => 'support@nuxie.ai' }
   s.source           = { :path => '.' }
   s.source_files     = 'nuxie_flutter_native/Sources/nuxie_flutter_native/**/*'
   s.dependency       'Flutter'
