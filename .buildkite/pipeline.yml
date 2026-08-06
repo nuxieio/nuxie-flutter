@@ -1,0 +1,22 @@
+env:
+  CI: "1"
+
+steps:
+  - label: ":flutter: Analyze and test packages"
+    command: |
+      set -euo pipefail
+      export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+      export ANDROID_SDK_ROOT="$ANDROID_HOME"
+      dart pub global activate melos
+      export PATH="$HOME/.pub-cache/bin:$PATH"
+      melos bootstrap
+      melos run analyze
+      melos run test
+    agents:
+      queue: nuxie-pr
+      nuxie-platform: macos
+    timeout_in_minutes: 90
+    retry:
+      automatic:
+        - exit_status: -1
+          limit: 1
