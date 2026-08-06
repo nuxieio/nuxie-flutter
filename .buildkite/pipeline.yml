@@ -7,11 +7,17 @@ steps:
       set -euo pipefail
       export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
       export ANDROID_SDK_ROOT="$ANDROID_HOME"
-      dart pub global activate melos
-      export PATH="$HOME/.pub-cache/bin:$PATH"
-      melos bootstrap
-      melos run analyze
-      melos run test
+      for package in packages/*; do
+        [[ -f "$package/pubspec.yaml" ]] || continue
+        (
+          cd "$package"
+          flutter pub get
+          flutter analyze
+          if [[ -d test ]]; then
+            flutter test
+          fi
+        )
+      done
     agents:
       queue: nuxie-pr
       nuxie-platform: macos
