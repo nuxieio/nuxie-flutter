@@ -5,126 +5,92 @@ import 'package:nuxie_flutter_platform_interface/nuxie_flutter_platform_interfac
 
 void main() {
   group('bridge mappers', () {
-    test('configure request maps options to bridge payload', () {
+    test('configure request contains only customer-owned options', () {
       final request = toConfigureRequest(
         apiKey: 'NX_TEST',
         wrapperVersion: '1.2.3',
         usingPurchaseController: true,
         options: const NuxieOptions(
-          environment: NuxieEnvironment.staging,
+          environment: NuxieEnvironment.development,
           logLevel: NuxieLogLevel.info,
-          eventLinkingPolicy: NuxieEventLinkingPolicy.keepSeparate,
-          purchaseTimeoutSeconds: 42,
+          purchaseHandlingMode: PurchaseHandlingMode.observer,
+          localeIdentifier: 'en-GB',
         ),
       );
 
       expect(request.apiKey, 'NX_TEST');
       expect(request.wrapperVersion, '1.2.3');
       expect(request.usingPurchaseController, isTrue);
-      expect(request.environment, 'staging');
-      expect(request.logLevel, 'info');
-      expect(request.eventLinkingPolicy, 'keep_separate');
-      expect(request.purchaseTimeoutSeconds, 42);
+      expect(request.environment, 'development');
+      expect(request.purchaseHandlingMode, 'observer');
+      expect(request.localeIdentifier, 'en-GB');
     });
 
-    test('trigger update mapping keeps terminal semantics', () {
-      final nonTerminal = fromTriggerUpdate(
-        PTriggerUpdate(
-          requestId: 't_1',
-          updateKind: 'decision',
-          payload: <String?, Object?>{
-            'type': 'flow_shown',
-            'ref': <String?, Object?>{
-              'journeyId': 'j_1',
-              'campaignId': 'c_1',
-              'flowId': 'f_1',
-            },
-          },
-          isTerminal: false,
-          timestampMs: 1,
-        ),
-      );
-
-      expect(nonTerminal.isTerminal, isFalse);
-      expect(nonTerminal.update, isA<TriggerDecisionUpdate>());
-
-      final terminal = fromTriggerUpdate(
-        PTriggerUpdate(
-          requestId: 't_1',
-          updateKind: 'decision',
-          payload: <String?, Object?>{'type': 'allowed_immediate'},
-          timestampMs: 2,
-        ),
-      );
-
-      expect(terminal.isTerminal, isTrue);
-      expect(
-        terminal.update,
-        isA<TriggerDecisionUpdate>().having(
-          (u) => u.decision,
-          'decision',
-          isA<TriggerDecisionAllowedImmediate>(),
-        ),
-      );
-    });
-
-    test('unknown trigger update kind maps to wrapper error update', () {
-      final update = fromTriggerUpdate(
-        PTriggerUpdate(
-          requestId: 't_2',
-          updateKind: 'unknown_kind',
-          payload: const <String?, Object?>{},
-          timestampMs: 3,
-        ),
-      );
-
-      expect(update.update, isA<TriggerErrorUpdate>());
-      expect(
-        update.update,
-        isA<TriggerErrorUpdate>().having(
-          (u) => u.error.code,
-          'code',
-          'unknown_trigger_update',
-        ),
-      );
-    });
-
-    test('purchase and restore result mapping preserves enum variants', () {
-      final purchase = toPurchaseResult(
-        const NuxiePurchaseResult(
-          type: NuxiePurchaseResultType.pending,
-          productId: 'sku_1',
-        ),
-      );
-      final restore = toRestoreResult(
-        const NuxieRestoreResult(
-          type: NuxieRestoreResultType.noPurchases,
-        ),
-      );
-
-      expect(purchase.type, 'pending');
-      expect(purchase.productId, 'sku_1');
-      expect(restore.type, 'no_purchases');
-    });
-
-    test('feature access changed event requires target access payload', () {
-      expect(
-        () => fromFeatureAccessChangedEvent(
-          PFeatureAccessChangedEvent(
-            featureId: 'pro',
-            from: PFeatureAccess(
-              allowed: false,
-              unlimited: false,
-              balance: 0,
-              type: 'boolean',
-            ),
-            to: null,
-            timestampMs: 1,
+    test('Feature mapping preserves fractions and authoritative access', () {
+      final result = fromFeatureUsageResult(
+        PFeatureUsageResult(
+          success: true,
+          featureId: 'credits',
+          amountUsed: 1.5,
+          usageCurrent: 2.5,
+          usageLimit: 10.5,
+          usageRemaining: 8,
+          authoritativeAccess: PFeatureAccess(
+            allowed: true,
+            unlimited: false,
+            balance: 8,
+            type: 'creditSystem',
           ),
         ),
-        throwsA(
-          isA<NuxieException>().having((e) => e.code, 'code', 'NATIVE_ERROR'),
+      );
+
+      expect(result.amountUsed, 1.5);
+      expect(result.usage?.limit, 10.5);
+      expect(result.authoritativeAccess?.balance, 8);
+    });
+
+    test('typed activity and App Action mapping is lossless', () {
+      final activity = fromActivityInfo(
+        PActivityInfo(
+          schemaVersion: 1,
+          id: 'event-1',
+          timestampMs: 10,
+          receivedAtMs: 11,
+          name: r'$journey_leg_started',
+          properties: <String?, Object?>{'journey_id': 'journey-1'},
         ),
+      );
+      final action = fromAppAction(
+        PAppAction(
+          name: 'open_settings',
+          payload: <String?, Object?>{'tab': 'billing'},
+          experience: PExperienceRef(
+            experienceId: 'experience-1',
+            experienceVersion: 'version-1',
+            journeyId: 'journey-1',
+          ),
+        ),
+      );
+
+      expect(activity.properties['journey_id'], 'journey-1');
+      expect(action.payload?['tab'], 'billing');
+      expect(action.experience.journeyId, 'journey-1');
+    });
+
+    test('commerce results use canonical variants', () {
+      expect(
+        toPurchaseResult(
+          const NuxiePurchaseResult(type: NuxiePurchaseResultType.pending),
+        ).type,
+        'pending',
+      );
+      expect(
+        toRestoreResult(
+          const NuxieRestoreResult(
+            type: NuxieRestoreResultType.noPurchases,
+          ),
+        ).type,
+        'no_purchases',
       );
     });
   });

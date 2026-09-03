@@ -1,187 +1,110 @@
 # Nuxie Flutter SDK
 
-Native-first Flutter wrapper for Nuxie.
+Flutter bindings for the Nuxie iOS and Android SDKs. Journey evaluation,
+Experience presentation, Features, identity, and commerce remain native. This
+workspace provides a thin generated platform channel, a Dart facade, and
+optional Bloc and Riverpod adapters.
 
-This SDK keeps runtime logic on native iOS/Android and exposes an ergonomic, typed Dart API.
+## Packages
 
-- iOS runtime: `NuxieSDK` from `nuxie-ios`
-- Android runtime: `NuxieSDK` from `nuxie-android`
-- Flutter bridge: Pigeon-generated typed bridge + platform interface
-
-## Documentation Index
-
-- Quickstart: [`docs/quickstart.md`](docs/quickstart.md)
-- API reference: [`docs/api-reference.md`](docs/api-reference.md)
-- Native platform setup: [`docs/native-setup.md`](docs/native-setup.md)
-- Riverpod/Bloc adapters: [`docs/adapters.md`](docs/adapters.md)
-- Architecture: [`docs/architecture.md`](docs/architecture.md)
-- Testing and validation: [`docs/testing.md`](docs/testing.md)
-- Troubleshooting: [`docs/troubleshooting.md`](docs/troubleshooting.md)
-- Example app: [`packages/nuxie_flutter/example`](packages/nuxie_flutter/example)
-- Release process: [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)
-- Version map: [`VERSIONS.md`](VERSIONS.md)
-- Migration notes: [`MIGRATION.md`](MIGRATION.md)
-
-## Repository Layout
-
-- `packages/nuxie_flutter`: app-facing API
-- `packages/nuxie_flutter_platform_interface`: shared models + abstract platform contract
-- `packages/nuxie_flutter_native`: iOS/Android implementation
-- `packages/nuxie_flutter_riverpod`: optional Riverpod adapter package
-- `packages/nuxie_flutter_bloc`: optional Bloc/Cubit adapter package
-- `packages/mobile_wrapper_contract`: shared Expo/Flutter contract fixtures
-
-## Compatibility
-
-- Dart: `>=3.3.0 <4.0.0`
-- Flutter: `>=3.19.0`
-- Android: `minSdk 21`
-- iOS: `15.0+`
+- `nuxie_flutter`: app-facing API and widgets.
+- `nuxie_flutter_platform_interface`: portable models and platform seam.
+- `nuxie_flutter_native`: generated Pigeon channel plus Swift and Kotlin hosts.
+- `nuxie_flutter_bloc`: optional `FeatureAccessCubit`.
+- `nuxie_flutter_riverpod`: optional Feature providers.
 
 ## Install
 
-This repository is currently organized for workspace/path consumption. In your
-Flutter app:
-
 ```yaml
 dependencies:
-  nuxie_flutter:
-    path: packages/nuxie_flutter
+  nuxie_flutter: ^0.1.0
 ```
 
-Optional adapters:
+The native plugin pins Nuxie iOS and Android `0.1.0` exactly. iOS applications
+run `pod install`; Android applications resolve the native artifact from
+Maven Central.
 
-```yaml
-dependencies:
-  nuxie_flutter_riverpod:
-    path: packages/nuxie_flutter_riverpod
-  nuxie_flutter_bloc:
-    path: packages/nuxie_flutter_bloc
-```
-
-## 60-Second Quickstart
+## Configure
 
 ```dart
-import 'package:nuxie_flutter/nuxie_flutter.dart';
-
-Future<void> configureNuxie() async {
-  await Nuxie.initialize(
-    apiKey: 'NX_YOUR_API_KEY',
-    options: const NuxieOptions(
-      environment: NuxieEnvironment.production,
-    ),
-  );
-}
-```
-
-```dart
-final nuxie = Nuxie.instance;
-
-await nuxie.identify('user_123');
-final trigger = nuxie.trigger('paywall_tapped');
-trigger.updates.listen((update) {
-  // optional progressive updates
-});
-final terminal = await trigger.done;
-
-if (terminal is TriggerDecisionUpdate) {
-  // handle terminal decision
-}
-```
-
-## Key Concepts
-
-- `Nuxie.initialize(...)`: one-time configuration; returns singleton instance.
-- `Nuxie.instance`: shared client after configuration.
-- `trigger(...)`: progressive stream (`updates`) + terminal future (`done`).
-- `triggerOnce(...)`: convenience terminal-only trigger API.
-- `showFlow(flowId)`: native full-screen flow presentation.
-- `NuxieFlowView`: embedded native flow view for custom layouts. On Android,
-  host it from `FlutterFragmentActivity` / another `ComponentActivity`
-  subclass.
-- `NuxiePurchaseController`: Dart purchase/restore bridge for flow purchase actions.
-- `NuxieFeatureBuilder`: widget helper for feature gating in UI trees.
-
-## Purchase Bridge
-
-Pass a purchase controller during initialization:
-
-```dart
-await Nuxie.initialize(
-  apiKey: 'NX_YOUR_API_KEY',
-  purchaseController: MyPurchaseController(),
+final nuxie = await Nuxie.initialize(
+  apiKey: 'NX_PROD_...',
+  options: const NuxieOptions(
+    environment: NuxieEnvironment.production,
+    logLevel: NuxieLogLevel.info,
+  ),
 );
 ```
 
-```dart
-class MyPurchaseController implements NuxiePurchaseController {
-  @override
-  Future<NuxiePurchaseResult> onPurchase(NuxiePurchaseRequest request) async {
-    // call billing provider and map to NuxiePurchaseResult
-    return NuxiePurchaseResult(
-      type: NuxiePurchaseResultType.success,
-      productId: request.productId,
-    );
-  }
+## Capture events and run Journeys
 
-  @override
-  Future<NuxieRestoreResult> onRestore(NuxieRestoreRequest request) async {
-    return const NuxieRestoreResult(type: NuxieRestoreResultType.success);
-  }
+```dart
+nuxie.trigger(
+  'paywall_opened',
+  properties: <String, Object?>{'source': 'settings'},
+);
+```
+
+`trigger` is event-only and fire-and-forget. Matching Journeys run in native
+code and present Experiences as their authored programs advance. Use
+`dismiss()` to close the active Experience.
+
+## Features
+
+```dart
+final access = await nuxie.hasFeature(
+  'ai_credits',
+  requiredBalance: 2.5,
+  policy: FeatureCheckPolicy.remote,
+);
+
+if (access.allowed) {
+  final result = await nuxie.useFeatureAndWait(
+    'ai_credits',
+    amount: 2.5,
+  );
+  print(result.authoritativeAccess);
 }
 ```
 
-## Native Setup Notes
+Feature balances preserve fractional values. Subscribe to
+`featureAccessChanges` for reactive updates.
 
-- iOS CocoaPods support: `packages/nuxie_flutter_native/ios/nuxie_flutter_native.podspec`
-- iOS SPM support: `packages/nuxie_flutter_native/ios/nuxie_flutter_native/Package.swift`
-- If your flows use native permission actions, the host app still needs the
-  corresponding iOS usage-description keys and Android manifest permissions.
-- Android plugin validation can be run with:
+## Native activity and App Actions
 
-```bash
-/Users/levi/dev/nuxie-dev-5/packages/nuxie-android/gradlew \
-  -p packages/nuxie_flutter_native/android \
-  assembleDebug
+```dart
+nuxie.activities.listen((activity) {
+  analytics.track(activity.name, activity.properties);
+});
+
+nuxie.appActions.listen((action) {
+  if (action.name == 'open_settings') {
+    navigation.openSettings(action.payload);
+  }
+});
 ```
 
-See full setup details in [`docs/native-setup.md`](docs/native-setup.md).
+## Commerce
 
-## Example App
+Pass a `NuxiePurchaseController` during initialization when the app owns
+checkout. Requests mirror the portable snake-case native wire without adding
+receipt or transaction fields. Purchase results are `purchased`, `cancelled`,
+`pending`, or `failed`; restore results are `restored`, `no_purchases`, or
+`failed`.
 
-The example app includes a one-click sanity flow that exercises:
-
-- `initialize`
-- `identify`
-- `triggerOnce`
-- feature access + usage APIs
-- queue APIs (`getQueuedEventCount`, `flushEvents`)
-- flow embedding via `NuxieFlowView`
-
-Run:
+## Validate
 
 ```bash
-cd packages/nuxie_flutter/example
-flutter pub get
-flutter run
-```
-
-## Development
-
-From this repository root:
-
-```bash
-cd packages/nuxie_flutter
 flutter analyze
 flutter test
 ```
 
-Optional (if `melos` is installed in your environment): run workspace-wide
-analyze/test via `melos run analyze` and `melos run test`.
-
-Regenerate Pigeon bridge after schema updates:
+Regenerate channels after editing the Pigeon source:
 
 ```bash
 cd packages/nuxie_flutter_native
 flutter pub run pigeon --input pigeons/nuxie_bridge.dart
 ```
+
+See [Quickstart](docs/quickstart.md), [API Reference](docs/api-reference.md),
+and [Native Setup](docs/native-setup.md).

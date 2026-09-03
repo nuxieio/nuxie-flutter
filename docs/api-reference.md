@@ -1,174 +1,61 @@
-# API Reference
+# API reference
 
-Primary export:
+## Initialization
 
 ```dart
-import 'package:nuxie_flutter/nuxie_flutter.dart';
+Future<Nuxie> Nuxie.initialize({
+  required String apiKey,
+  NuxieOptions? options,
+  NuxiePurchaseController? purchaseController,
+  String wrapperVersion = '0.1.0',
+});
 ```
 
-This export also re-exports all shared model/event classes from
-`nuxie_flutter_platform_interface`.
+`NuxieOptions` contains only customer-owned settings: environment, log level,
+console logging, sensitive-data redaction, locale, purchase handling mode, and
+the iOS development Test Store switch.
 
-## Nuxie
+## Lifecycle and identity
 
-### Static
-
-- `Nuxie.initialize({required apiKey, options, purchaseController, wrapperVersion, platformOverride})`
-- `Nuxie.instance`
-
-### Properties
-
-- `isConfigured`
-- `sdkVersion`
-- `purchaseController`
-- `featureAccessChanges`
-- `flowLifecycleEvents`
-- `logEvents`
-- `triggerUpdates`
-- `purchaseRequests`
-- `restoreRequests`
-
-### Identity
-
+- `shutdown()`
 - `identify(distinctId, {userProperties, userPropertiesSetOnce})`
-- `reset({keepAnonymousId = true})`
+- `reset({keepAnonymousId = false})`
 - `getDistinctId()`
 - `getAnonymousId()`
 - `getIsIdentified()`
 
-### Trigger / Journey
+## Events and presentation
 
-- `trigger(event, {properties, userProperties, userPropertiesSetOnce})`
-- `triggerOnce(event, {properties, userProperties, userPropertiesSetOnce, timeout})`
-- `showFlow(flowId)`
+- `trigger(event, {properties}) -> void`
+- `dismiss()`
+- `setLocaleIdentifier(localeIdentifier)`
 
-### Profile
+Journey decisions are native-owned. `trigger` does not return a match,
+presentation result, handle, or cancellation token.
 
-- `refreshProfile()`
+## Features
 
-### Features
+- `featureAccessChanges`
+- `hasFeature(featureId, {requiredBalance = 1, entityId, policy})`
+- `useFeature(featureId, {amount = 1, entityId, metadata}) -> void`
+- `useFeatureAndWait(featureId, {amount = 1, entityId, setUsage, metadata})`
 
-- `hasFeature(featureId, {requiredBalance, entityId})`
-- `getCachedFeature(featureId, {entityId})`
-- `checkFeature(featureId, {requiredBalance, entityId})`
-- `refreshFeature(featureId, {requiredBalance, entityId})`
-- `useFeature(featureId, {amount = 1, entityId, metadata})`
-- `useFeatureAndWait(featureId, {amount = 1, entityId, setUsage = false, metadata})`
+`FeatureCheckPolicy` is `cacheFirst` or `remote`. Balances and usage values are
+`double`. Atomic usage results include `authoritativeAccess`.
 
-### Queue
+## Native callbacks
 
-- `flushEvents()`
-- `getQueuedEventCount()`
-- `pauseEventQueue()`
-- `resumeEventQueue()`
+- `activities: Stream<NuxieActivityInfo>`
+- `appActions: Stream<AppAction>`
+- `purchaseRequests: Stream<NuxiePurchaseRequest>`
+- `restoreRequests: Stream<NuxieRestoreRequest>`
 
-### Lifecycle
+`AppAction` carries a name, scalar payload, and `ExperienceRef` with Experience
+identity and optional Journey identity.
 
-- `shutdown()`
-- `setPurchaseController(controller)`
+## Commerce
 
-## NuxieTriggerOperation
-
-- `requestId`
-- `updates` (`Stream<TriggerUpdate>`)
-- `done` (`Future<TriggerTerminalUpdate>`)
-- `cancel()`
-
-## Widgets
-
-- `NuxieBuilder`
-  - Lightweight helper to access configured `Nuxie.instance` in widget trees.
-  - Optional `unconfiguredBuilder` fallback.
-- `NuxieFeatureBuilder`
-  - Reactive helper that does initial `hasFeature(...)` then listens to
-    `featureAccessChanges`.
-- `NuxieFlowView`
-  - Embedded native flow view for iOS/Android.
-  - On Android, the host activity must be a `ComponentActivity` (for Flutter
-    apps, this typically means `FlutterFragmentActivity`).
-  - For unsupported targets, renders provided `placeholder` (or default text).
-
-## Trigger Models
-
-- `TriggerUpdate` variants:
-  - `TriggerDecisionUpdate`
-  - `TriggerEntitlementUpdate`
-  - `TriggerJourneyUpdate`
-  - `TriggerErrorUpdate`
-- `TriggerTerminalUpdate` is an alias of `TriggerUpdate`.
-
-Terminal behavior:
-
-- terminal on any `TriggerErrorUpdate`
-- terminal on `TriggerJourneyUpdate`
-- terminal on decision kinds:
-  - `allowedImmediate`
-  - `deniedImmediate`
-  - `noMatch`
-  - `suppressed`
-- terminal on entitlement kinds:
-  - `allowed`
-  - `denied`
-
-## Feature Models
-
-- `FeatureAccess`
-  - `allowed`
-  - `unlimited`
-  - `balance`
-  - `type` (`boolean`, `metered`, `creditSystem`)
-- `FeatureCheckResult`
-- `FeatureUsageResult`
-
-## Purchase Bridge
-
-Implement `NuxiePurchaseController`:
-
-```dart
-abstract class NuxiePurchaseController {
-  Future<NuxiePurchaseResult> onPurchase(NuxiePurchaseRequest request);
-  Future<NuxieRestoreResult> onRestore(NuxieRestoreRequest request);
-}
-```
-
-Result enums:
-
-- `NuxiePurchaseResultType`: `success`, `cancelled`, `pending`, `failed`
-- `NuxieRestoreResultType`: `success`, `noPurchases`, `failed`
-
-## Options
-
-`NuxieOptions` fields include:
-
-- environment + endpoint
-- logging controls
-- retry and batch settings
-- queue and cache limits
-- locale and debug mode
-- event linking policy
-- flow cache/download settings
-- purchase timeout
-
-See source for full field list:
-
-- `packages/nuxie_flutter_platform_interface/lib/src/models/nuxie_options.dart`
-
-## Errors
-
-API calls can throw `NuxieException`:
-
-- `code`
-- `message`
-- `details` (optional)
-
-## Optional Adapter APIs
-
-Riverpod package (`nuxie_flutter_riverpod`):
-
-- `nuxieProvider`
-- `NuxieFeatureQuery`
-- `nuxieFeatureProvider`
-
-Bloc package (`nuxie_flutter_bloc`):
-
-- `FeatureAccessCubit`
+`NuxiePurchaseController.purchase` returns `NuxiePurchaseResult` with
+`purchased`, `cancelled`, `pending`, or `failed`.
+`NuxiePurchaseController.restore` returns `NuxieRestoreResult` with `restored`,
+`noPurchases`, or `failed`.

@@ -24,297 +24,173 @@ void main() {
       try {
         await Nuxie.instance.shutdown();
       } catch (_) {
-        // ignore
+        // No configured singleton remains.
       }
       await fake.dispose();
     });
 
-    test('initialize configures the platform and sets singleton', () async {
+    test('initialize forwards only the compact configuration', () async {
       final nuxie = await Nuxie.initialize(
         apiKey: 'NX_TEST',
-        options: const NuxieOptions(environment: NuxieEnvironment.staging),
+        options: const NuxieOptions(
+          environment: NuxieEnvironment.development,
+          purchaseHandlingMode: PurchaseHandlingMode.observer,
+        ),
         platformOverride: fake,
       );
 
       expect(identical(nuxie, Nuxie.instance), isTrue);
-      expect(fake.lastConfigureApiKey, 'NX_TEST');
-      expect(fake.lastConfigureUsingPurchaseController, isFalse);
-      expect(fake.lastOptions?.environment, NuxieEnvironment.staging);
-      expect(nuxie.isConfigured, isTrue);
-    });
-
-    test('initialize is idempotent when already configured', () async {
-      final first = await Nuxie.initialize(
-        apiKey: 'NX_TEST',
-        platformOverride: fake,
-      );
-      final second = await Nuxie.initialize(
-        apiKey: 'NX_TEST_IGNORED',
-        platformOverride: fake,
-      );
-
-      expect(identical(first, second), isTrue);
-      expect(fake.configureCalls, 1);
-    });
-
-    test('trigger resolves once a terminal update is emitted', () async {
-      final nuxie = await Nuxie.initialize(
-        apiKey: 'NX_TEST',
-        platformOverride: fake,
-      );
-
-      final operation = nuxie.trigger('premium_tapped');
-      await _nextTick();
-
-      expect(fake.startedTriggers.length, 1);
-      final requestId = fake.startedTriggers.single.requestId;
-
-      final updates = <TriggerUpdate>[];
-      final subscription = operation.updates.listen(updates.add);
-
-      fake.emitTrigger(
-        NuxieTriggerUpdateEvent(
-          requestId: requestId,
-          update: TriggerDecisionUpdate(
-            TriggerDecisionFlowShown(
-              const JourneyRef(
-                journeyId: 'j_1',
-                campaignId: 'c_1',
-                flowId: 'f_1',
-              ),
-            ),
-          ),
-          isTerminal: false,
-          timestampMs: DateTime.now().millisecondsSinceEpoch,
-        ),
-      );
-
-      const terminal = TriggerDecisionUpdate(TriggerDecisionAllowedImmediate());
-      fake.emitTrigger(
-        NuxieTriggerUpdateEvent(
-          requestId: requestId,
-          update: terminal,
-          isTerminal: true,
-          timestampMs: DateTime.now().millisecondsSinceEpoch,
-        ),
-      );
-
-      final result = await operation.done;
-      await subscription.cancel();
-
-      expect(result, terminal);
-      expect(updates.length, 2);
-      expect(
-        updates.last,
-        isA<TriggerDecisionUpdate>().having(
-          (u) => u.decision,
-          'decision',
-          isA<TriggerDecisionAllowedImmediate>(),
-        ),
-      );
-    });
-
-    test('cancel forwards to platform and resolves as cancelled terminal error',
-        () async {
-      final nuxie = await Nuxie.initialize(
-        apiKey: 'NX_TEST',
-        platformOverride: fake,
-      );
-
-      final operation = nuxie.trigger('premium_tapped');
-      await _nextTick();
-      final requestId = fake.startedTriggers.single.requestId;
-
-      await operation.cancel();
-      final result = await operation.done;
-
-      expect(fake.cancelledTriggerRequestIds, contains(requestId));
-      expect(
-        result,
-        isA<TriggerErrorUpdate>().having(
-          (u) => u.error.code,
-          'code',
-          'trigger_cancelled',
-        ),
-      );
-    });
-
-    test('start trigger failures map to trigger_start_failed terminal update',
-        () async {
-      fake.throwOnStartTrigger = true;
-      final nuxie = await Nuxie.initialize(
-        apiKey: 'NX_TEST',
-        platformOverride: fake,
-      );
-
-      final operation = nuxie.trigger('premium_tapped');
-      final result = await operation.done;
-
-      expect(
-        result,
-        isA<TriggerErrorUpdate>().having(
-          (u) => u.error.code,
-          'code',
-          'trigger_start_failed',
-        ),
-      );
+      expect(fake.apiKey, 'NX_TEST');
+      expect(fake.options?.environment, NuxieEnvironment.development);
+      expect(fake.usingPurchaseController, isFalse);
     });
 
     test(
-        'triggerOnce timeout cancels and returns trigger_timeout terminal update',
-        () async {
+      'trigger is event-only and reset defaults to a fresh anonymous id',
+      () async {
+        final nuxie = await Nuxie.initialize(
+          apiKey: 'NX_TEST',
+          platformOverride: fake,
+        );
+
+        expect(
+          () => nuxie.trigger(
+            'premium_tapped',
+            properties: <String, Object?>{'source': 'settings'},
+          ),
+          returnsNormally,
+        );
+        await nuxie.reset();
+
+        expect(fake.events.single.event, 'premium_tapped');
+        expect(fake.events.single.properties?['source'], 'settings');
+        expect(fake.resetValues, <bool>[false]);
+      },
+    );
+
+    test(
+      'Feature APIs preserve policy, fractions, and authoritative access',
+      () async {
+        final nuxie = await Nuxie.initialize(
+          apiKey: 'NX_TEST',
+          platformOverride: fake,
+        );
+
+        final access = await nuxie.hasFeature(
+          'credits',
+          requiredBalance: 2.5,
+          entityId: 'workspace-1',
+          policy: FeatureCheckPolicy.remote,
+        );
+        final usage = await nuxie.useFeatureAndWait('credits', amount: 1.5);
+
+        expect(access.balance, 3.5);
+        expect(fake.featurePolicy, FeatureCheckPolicy.remote);
+        expect(fake.requiredBalance, 2.5);
+        expect(usage.authoritativeAccess?.balance, 8);
+      },
+    );
+
+    test('typed activity and App Action streams are exposed', () async {
       final nuxie = await Nuxie.initialize(
         apiKey: 'NX_TEST',
         platformOverride: fake,
       );
+      final activity = nuxie.activities.first;
+      final action = nuxie.appActions.first;
 
-      final result = await nuxie.triggerOnce(
-        'premium_tapped',
-        timeout: const Duration(milliseconds: 10),
-      );
-
-      expect(
-        result,
-        isA<TriggerErrorUpdate>().having(
-          (u) => u.error.code,
-          'code',
-          'trigger_timeout',
+      fake.emitActivity(
+        const NuxieActivityInfo(
+          schemaVersion: 1,
+          id: 'event-1',
+          timestampMs: 1,
+          receivedAtMs: 2,
+          name: r'$journey_leg_started',
+          properties: <String, Object>{'journey_id': 'journey-1'},
         ),
       );
-      expect(fake.cancelledTriggerRequestIds, hasLength(1));
+      fake.emitAction(
+        const AppAction(
+          name: 'open_settings',
+          payload: <String, Object>{'tab': 'billing'},
+          experience: ExperienceRef(
+            experienceId: 'experience-1',
+            journeyId: 'journey-1',
+          ),
+        ),
+      );
+
+      expect((await activity).name, r'$journey_leg_started');
+      expect((await action).experience.journeyId, 'journey-1');
     });
 
-    test('purchase controller completes purchase and restore requests',
-        () async {
-      final controller = _RecordingPurchaseController();
+    test('purchase controller completes canonical results', () async {
+      final controller = _PurchaseController();
       await Nuxie.initialize(
         apiKey: 'NX_TEST',
         purchaseController: controller,
         platformOverride: fake,
       );
 
-      expect(fake.lastConfigureUsingPurchaseController, isTrue);
-
-      fake.emitPurchaseRequest(
+      fake.emitPurchase(
         const NuxiePurchaseRequest(
-          requestId: 'p_1',
+          requestId: 'purchase-1',
           platform: 'android',
-          productId: 'sku_premium',
+          productId: 'pro',
+          storeProductId: 'pro:monthly',
           timestampMs: 1,
         ),
       );
-      fake.emitRestoreRequest(
+      fake.emitRestore(
         const NuxieRestoreRequest(
-          requestId: 'r_1',
+          requestId: 'restore-1',
           platform: 'android',
           timestampMs: 2,
         ),
       );
-      await _nextTick();
+      await Future<void>.delayed(const Duration(milliseconds: 1));
 
-      expect(controller.purchaseRequests.single.productId, 'sku_premium');
-      expect(controller.restoreRequests.single.requestId, 'r_1');
-      expect(fake.completedPurchases.single.requestId, 'p_1');
+      expect(fake.usingPurchaseController, isTrue);
       expect(
         fake.completedPurchases.single.result.type,
-        NuxiePurchaseResultType.success,
+        NuxiePurchaseResultType.purchased,
       );
-      expect(fake.completedRestores.single.requestId, 'r_1');
       expect(
         fake.completedRestores.single.result.type,
-        NuxieRestoreResultType.success,
-      );
-    });
-
-    test('purchase controller failures map to failed completion payloads',
-        () async {
-      final controller = _ThrowingPurchaseController();
-      await Nuxie.initialize(
-        apiKey: 'NX_TEST',
-        purchaseController: controller,
-        platformOverride: fake,
-      );
-
-      fake.emitPurchaseRequest(
-        const NuxiePurchaseRequest(
-          requestId: 'p_2',
-          platform: 'ios',
-          productId: 'sku_premium',
-          timestampMs: 1,
-        ),
-      );
-      fake.emitRestoreRequest(
-        const NuxieRestoreRequest(
-          requestId: 'r_2',
-          platform: 'ios',
-          timestampMs: 2,
-        ),
-      );
-      await _nextTick();
-
-      expect(fake.completedPurchases.single.requestId, 'p_2');
-      expect(
-        fake.completedPurchases.single.result.type,
-        NuxiePurchaseResultType.failed,
-      );
-      expect(fake.completedRestores.single.requestId, 'r_2');
-      expect(
-        fake.completedRestores.single.result.type,
-        NuxieRestoreResultType.failed,
+        NuxieRestoreResultType.noPurchases,
       );
     });
   });
 }
 
-Future<void> _nextTick() =>
-    Future<void>.delayed(const Duration(milliseconds: 1));
-
 class _FakePlatform extends NuxieFlutterPlatform {
-  final StreamController<FeatureAccessChangedEvent> _featureChanges =
-      StreamController<FeatureAccessChangedEvent>.broadcast();
-  final StreamController<NuxieFlowLifecycleEvent> _flowLifecycle =
-      StreamController<NuxieFlowLifecycleEvent>.broadcast();
-  final StreamController<NuxieLogEvent> _log =
-      StreamController<NuxieLogEvent>.broadcast();
-  final StreamController<NuxieTriggerUpdateEvent> _triggerUpdates =
-      StreamController<NuxieTriggerUpdateEvent>.broadcast();
-  final StreamController<NuxiePurchaseRequest> _purchaseRequests =
-      StreamController<NuxiePurchaseRequest>.broadcast();
-  final StreamController<NuxieRestoreRequest> _restoreRequests =
-      StreamController<NuxieRestoreRequest>.broadcast();
+  final _features = StreamController<FeatureAccessChangedEvent>.broadcast();
+  final _activities = StreamController<NuxieActivityInfo>.broadcast();
+  final _actions = StreamController<AppAction>.broadcast();
+  final _purchases = StreamController<NuxiePurchaseRequest>.broadcast();
+  final _restores = StreamController<NuxieRestoreRequest>.broadcast();
 
-  final List<_StartedTriggerCall> startedTriggers = <_StartedTriggerCall>[];
-  final List<String> cancelledTriggerRequestIds = <String>[];
+  String? apiKey;
+  NuxieOptions? options;
+  bool? usingPurchaseController;
+  final List<_EventCall> events = <_EventCall>[];
+  final List<bool> resetValues = <bool>[];
   final List<_CompletedPurchase> completedPurchases = <_CompletedPurchase>[];
   final List<_CompletedRestore> completedRestores = <_CompletedRestore>[];
-
-  bool throwOnStartTrigger = false;
-  int configureCalls = 0;
-
-  String? lastConfigureApiKey;
-  NuxieOptions? lastOptions;
-  bool? lastConfigureUsingPurchaseController;
-  String? lastWrapperVersion;
+  FeatureCheckPolicy? featurePolicy;
+  double? requiredBalance;
 
   @override
   Stream<FeatureAccessChangedEvent> get featureAccessChanges =>
-      _featureChanges.stream;
-
+      _features.stream;
   @override
-  Stream<NuxieFlowLifecycleEvent> get flowLifecycleEvents =>
-      _flowLifecycle.stream;
-
+  Stream<NuxieActivityInfo> get activities => _activities.stream;
   @override
-  Stream<NuxieLogEvent> get logEvents => _log.stream;
-
+  Stream<AppAction> get appActions => _actions.stream;
   @override
-  Stream<NuxieTriggerUpdateEvent> get triggerUpdates => _triggerUpdates.stream;
-
+  Stream<NuxiePurchaseRequest> get purchaseRequests => _purchases.stream;
   @override
-  Stream<NuxiePurchaseRequest> get purchaseRequests => _purchaseRequests.stream;
-
-  @override
-  Stream<NuxieRestoreRequest> get restoreRequests => _restoreRequests.stream;
+  Stream<NuxieRestoreRequest> get restoreRequests => _restores.stream;
 
   @override
   Future<void> configure({
@@ -323,128 +199,65 @@ class _FakePlatform extends NuxieFlutterPlatform {
     required bool usingPurchaseController,
     required String wrapperVersion,
   }) async {
-    configureCalls += 1;
-    lastConfigureApiKey = apiKey;
-    lastOptions = options;
-    lastConfigureUsingPurchaseController = usingPurchaseController;
-    lastWrapperVersion = wrapperVersion;
+    this.apiKey = apiKey;
+    this.options = options;
+    this.usingPurchaseController = usingPurchaseController;
   }
 
   @override
   Future<void> shutdown() async {}
-
   @override
   Future<void> identify(
     String distinctId, {
     Map<String, Object?>? userProperties,
     Map<String, Object?>? userPropertiesSetOnce,
   }) async {}
-
   @override
-  Future<void> reset({bool keepAnonymousId = true}) async {}
+  Future<void> reset({bool keepAnonymousId = false}) async {
+    resetValues.add(keepAnonymousId);
+  }
 
   @override
   Future<String> getDistinctId() async => 'distinct';
-
   @override
-  Future<String> getAnonymousId() async => 'anon';
-
+  Future<String> getAnonymousId() async => 'anonymous';
   @override
   Future<bool> getIsIdentified() async => true;
 
   @override
-  Future<void> startTrigger(
-    String requestId, {
-    required String event,
-    Map<String, Object?>? properties,
-    Map<String, Object?>? userProperties,
-    Map<String, Object?>? userPropertiesSetOnce,
-  }) async {
-    if (throwOnStartTrigger) {
-      throw const NuxieException(
-        code: 'start_failed',
-        message: 'start failed',
-      );
-    }
-
-    startedTriggers.add(
-      _StartedTriggerCall(
-        requestId: requestId,
-        event: event,
-      ),
-    );
+  void trigger(String event, {Map<String, Object?>? properties}) {
+    events.add(_EventCall(event, properties));
   }
 
   @override
-  Future<void> cancelTrigger(String requestId) async {
-    cancelledTriggerRequestIds.add(requestId);
-  }
-
+  Future<void> dismiss() async {}
   @override
-  Future<void> showFlow(String flowId) async {}
-
-  @override
-  Future<ProfileResponse> refreshProfile() async =>
-      const ProfileResponse(raw: <String, Object?>{});
+  Future<void> setLocaleIdentifier(String? localeIdentifier) async {}
 
   @override
   Future<FeatureAccess> hasFeature(
     String featureId, {
-    int? requiredBalance,
+    double requiredBalance = 1,
     String? entityId,
+    FeatureCheckPolicy policy = FeatureCheckPolicy.cacheFirst,
   }) async {
+    this.requiredBalance = requiredBalance;
+    featurePolicy = policy;
     return const FeatureAccess(
       allowed: true,
       unlimited: false,
-      type: FeatureType.boolean,
+      balance: 3.5,
+      type: FeatureType.metered,
     );
   }
 
   @override
-  Future<FeatureAccess?> getCachedFeature(
-    String featureId, {
-    String? entityId,
-  }) async {
-    return null;
-  }
-
-  @override
-  Future<FeatureCheckResult> checkFeature(
-    String featureId, {
-    int? requiredBalance,
-    String? entityId,
-  }) async {
-    return const FeatureCheckResult(
-      customerId: 'c_1',
-      featureId: 'f_1',
-      requiredBalance: 1,
-      code: 'ok',
-      allowed: true,
-      unlimited: true,
-      type: FeatureType.boolean,
-    );
-  }
-
-  @override
-  Future<FeatureCheckResult> refreshFeature(
-    String featureId, {
-    int? requiredBalance,
-    String? entityId,
-  }) async {
-    return checkFeature(
-      featureId,
-      requiredBalance: requiredBalance,
-      entityId: entityId,
-    );
-  }
-
-  @override
-  Future<void> useFeature(
+  void useFeature(
     String featureId, {
     double amount = 1,
     String? entityId,
     Map<String, Object?>? metadata,
-  }) async {}
+  }) {}
 
   @override
   Future<FeatureUsageResult> useFeatureAndWait(
@@ -456,127 +269,67 @@ class _FakePlatform extends NuxieFlutterPlatform {
   }) async {
     return const FeatureUsageResult(
       success: true,
-      featureId: 'f_1',
-      amountUsed: 1,
+      featureId: 'credits',
+      amountUsed: 1.5,
+      authoritativeAccess: FeatureAccess(
+        allowed: true,
+        unlimited: false,
+        balance: 8,
+        type: FeatureType.creditSystem,
+      ),
     );
   }
 
   @override
-  Future<bool> flushEvents() async => true;
-
-  @override
-  Future<int> getQueuedEventCount() async => 0;
-
-  @override
-  Future<void> pauseEventQueue() async {}
-
-  @override
-  Future<void> resumeEventQueue() async {}
-
-  @override
-  Future<void> completePurchase(
-    String requestId,
-    NuxiePurchaseResult result,
-  ) async {
-    completedPurchases.add(
-      _CompletedPurchase(requestId: requestId, result: result),
-    );
+  void completePurchase(String requestId, NuxiePurchaseResult result) {
+    completedPurchases.add(_CompletedPurchase(requestId, result));
   }
 
   @override
-  Future<void> completeRestore(
-    String requestId,
-    NuxieRestoreResult result,
-  ) async {
-    completedRestores.add(
-      _CompletedRestore(requestId: requestId, result: result),
-    );
+  void completeRestore(String requestId, NuxieRestoreResult result) {
+    completedRestores.add(_CompletedRestore(requestId, result));
   }
 
-  void emitTrigger(NuxieTriggerUpdateEvent event) {
-    _triggerUpdates.add(event);
-  }
-
-  void emitPurchaseRequest(NuxiePurchaseRequest request) {
-    _purchaseRequests.add(request);
-  }
-
-  void emitRestoreRequest(NuxieRestoreRequest request) {
-    _restoreRequests.add(request);
-  }
+  void emitActivity(NuxieActivityInfo value) => _activities.add(value);
+  void emitAction(AppAction value) => _actions.add(value);
+  void emitPurchase(NuxiePurchaseRequest value) => _purchases.add(value);
+  void emitRestore(NuxieRestoreRequest value) => _restores.add(value);
 
   Future<void> dispose() async {
-    await _featureChanges.close();
-    await _flowLifecycle.close();
-    await _log.close();
-    await _triggerUpdates.close();
-    await _purchaseRequests.close();
-    await _restoreRequests.close();
+    await Future.wait(<Future<void>>[
+      _features.close(),
+      _activities.close(),
+      _actions.close(),
+      _purchases.close(),
+      _restores.close(),
+    ]);
   }
 }
 
-class _StartedTriggerCall {
-  const _StartedTriggerCall({
-    required this.requestId,
-    required this.event,
-  });
-
-  final String requestId;
+class _EventCall {
+  const _EventCall(this.event, this.properties);
   final String event;
+  final Map<String, Object?>? properties;
 }
 
 class _CompletedPurchase {
-  const _CompletedPurchase({
-    required this.requestId,
-    required this.result,
-  });
-
+  const _CompletedPurchase(this.requestId, this.result);
   final String requestId;
   final NuxiePurchaseResult result;
 }
 
 class _CompletedRestore {
-  const _CompletedRestore({
-    required this.requestId,
-    required this.result,
-  });
-
+  const _CompletedRestore(this.requestId, this.result);
   final String requestId;
   final NuxieRestoreResult result;
 }
 
-class _RecordingPurchaseController implements NuxiePurchaseController {
-  final List<NuxiePurchaseRequest> purchaseRequests = <NuxiePurchaseRequest>[];
-  final List<NuxieRestoreRequest> restoreRequests = <NuxieRestoreRequest>[];
+class _PurchaseController implements NuxiePurchaseController {
+  @override
+  Future<NuxiePurchaseResult> purchase(NuxiePurchaseRequest request) async =>
+      const NuxiePurchaseResult(type: NuxiePurchaseResultType.purchased);
 
   @override
-  Future<NuxiePurchaseResult> onPurchase(NuxiePurchaseRequest request) async {
-    purchaseRequests.add(request);
-    return NuxiePurchaseResult(
-      type: NuxiePurchaseResultType.success,
-      productId: request.productId,
-      purchaseToken: 'tok_123',
-    );
-  }
-
-  @override
-  Future<NuxieRestoreResult> onRestore(NuxieRestoreRequest request) async {
-    restoreRequests.add(request);
-    return const NuxieRestoreResult(
-      type: NuxieRestoreResultType.success,
-      restoredCount: 2,
-    );
-  }
-}
-
-class _ThrowingPurchaseController implements NuxiePurchaseController {
-  @override
-  Future<NuxiePurchaseResult> onPurchase(NuxiePurchaseRequest request) {
-    throw Exception('purchase_failed');
-  }
-
-  @override
-  Future<NuxieRestoreResult> onRestore(NuxieRestoreRequest request) {
-    throw Exception('restore_failed');
-  }
+  Future<NuxieRestoreResult> restore(NuxieRestoreRequest request) async =>
+      const NuxieRestoreResult(type: NuxieRestoreResultType.noPurchases);
 }

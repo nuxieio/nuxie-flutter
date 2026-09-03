@@ -1,63 +1,41 @@
-enum NuxiePurchaseResultType {
-  success,
-  cancelled,
-  pending,
-  failed,
-}
+enum NuxiePurchaseResultType { purchased, cancelled, pending, failed }
 
 class NuxiePurchaseRequest {
   const NuxiePurchaseRequest({
     required this.requestId,
     required this.platform,
     required this.productId,
+    required this.storeProductId,
     required this.timestampMs,
     this.basePlanId,
+    this.purchaseOptionId,
     this.offerId,
+    this.placementId,
     this.displayName,
     this.displayPrice,
-    this.price,
-    this.currencyCode,
   });
 
   final String requestId;
   final String platform;
   final String productId;
-  final int timestampMs;
+  final String storeProductId;
   final String? basePlanId;
+  final String? purchaseOptionId;
   final String? offerId;
+  final String? placementId;
   final String? displayName;
   final String? displayPrice;
-  final double? price;
-  final String? currencyCode;
+  final int timestampMs;
 }
 
 class NuxiePurchaseResult {
-  const NuxiePurchaseResult({
-    required this.type,
-    this.message,
-    this.productId,
-    this.purchaseToken,
-    this.orderId,
-    this.transactionId,
-    this.originalTransactionId,
-    this.transactionJws,
-  });
+  const NuxiePurchaseResult({required this.type, this.message});
 
   final NuxiePurchaseResultType type;
   final String? message;
-  final String? productId;
-  final String? purchaseToken;
-  final String? orderId;
-  final String? transactionId;
-  final String? originalTransactionId;
-  final String? transactionJws;
 }
 
-enum NuxieRestoreResultType {
-  success,
-  noPurchases,
-  failed,
-}
+enum NuxieRestoreResultType { restored, noPurchases, failed }
 
 class NuxieRestoreRequest {
   const NuxieRestoreRequest({
@@ -72,13 +50,14 @@ class NuxieRestoreRequest {
 }
 
 class NuxieRestoreResult {
-  const NuxieRestoreResult({
-    required this.type,
-    this.restoredCount,
-    this.message,
-  });
+  const NuxieRestoreResult({required this.type, this.message});
 
   final NuxieRestoreResultType type;
-  final int? restoredCount;
   final String? message;
+}
+
+abstract interface class NuxiePurchaseController {
+  Future<NuxiePurchaseResult> purchase(NuxiePurchaseRequest request);
+
+  Future<NuxieRestoreResult> restore(NuxieRestoreRequest request);
 }

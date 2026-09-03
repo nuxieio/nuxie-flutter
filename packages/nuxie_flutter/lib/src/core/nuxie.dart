@@ -7,20 +7,21 @@ class Nuxie {
   Nuxie._({
     required this.platform,
     required String wrapperVersion,
-  }) : _sdkVersion = wrapperVersion;
+    NuxiePurchaseController? purchaseController,
+  })  : _sdkVersion = wrapperVersion,
+        _purchaseController = purchaseController;
 
   static Nuxie? _instance;
-  static int _requestCounter = 0;
 
   static Nuxie get instance {
-    final instance = _instance;
-    if (instance == null) {
+    final value = _instance;
+    if (value == null) {
       throw const NuxieException(
         code: 'NOT_CONFIGURED',
         message: 'Nuxie.initialize must be called before Nuxie.instance.',
       );
     }
-    return instance;
+    return value;
   }
 
   static Future<Nuxie> initialize({
@@ -32,9 +33,7 @@ class Nuxie {
   }) async {
     final existing = _instance;
     if (existing != null && existing._isConfigured) {
-      if (purchaseController != null) {
-        existing.setPurchaseController(purchaseController);
-      }
+      existing.setPurchaseController(purchaseController);
       return existing;
     }
 
@@ -55,47 +54,30 @@ class Nuxie {
     final nuxie = Nuxie._(
       platform: platform,
       wrapperVersion: wrapperVersion,
-    ).._purchaseController = purchaseController;
-
-    nuxie._bindPlatformStreams();
+      purchaseController: purchaseController,
+    );
+    nuxie._bindCommerce();
     _instance = nuxie;
     return nuxie;
   }
 
   final NuxieFlutterPlatform platform;
-
   final String _sdkVersion;
 
   NuxiePurchaseController? _purchaseController;
-
-  StreamSubscription<NuxieTriggerUpdateEvent>? _triggerUpdatesSubscription;
-  StreamSubscription<NuxiePurchaseRequest>? _purchaseRequestsSubscription;
-  StreamSubscription<NuxieRestoreRequest>? _restoreRequestsSubscription;
-
-  final Map<String, _TriggerOperationState> _triggerOperations =
-      <String, _TriggerOperationState>{};
-
+  StreamSubscription<NuxiePurchaseRequest>? _purchaseSubscription;
+  StreamSubscription<NuxieRestoreRequest>? _restoreSubscription;
   bool _isConfigured = true;
 
   bool get isConfigured => _isConfigured;
-
   String get sdkVersion => _sdkVersion;
-
-  NuxiePurchaseController? get purchaseController => _purchaseController;
 
   Stream<FeatureAccessChangedEvent> get featureAccessChanges =>
       platform.featureAccessChanges;
-
-  Stream<NuxieFlowLifecycleEvent> get flowLifecycleEvents =>
-      platform.flowLifecycleEvents;
-
-  Stream<NuxieLogEvent> get logEvents => platform.logEvents;
-
-  Stream<NuxieTriggerUpdateEvent> get triggerUpdates => platform.triggerUpdates;
-
+  Stream<NuxieActivityInfo> get activities => platform.activities;
+  Stream<AppAction> get appActions => platform.appActions;
   Stream<NuxiePurchaseRequest> get purchaseRequests =>
       platform.purchaseRequests;
-
   Stream<NuxieRestoreRequest> get restoreRequests => platform.restoreRequests;
 
   void setPurchaseController(NuxiePurchaseController? controller) {
@@ -115,7 +97,7 @@ class Nuxie {
     );
   }
 
-  Future<void> reset({bool keepAnonymousId = true}) {
+  Future<void> reset({bool keepAnonymousId = false}) {
     _assertConfigured();
     return platform.reset(keepAnonymousId: keepAnonymousId);
   }
@@ -135,135 +117,45 @@ class Nuxie {
     return platform.getIsIdentified();
   }
 
-  NuxieTriggerOperation trigger(
-    String event, {
-    Map<String, Object?>? properties,
-    Map<String, Object?>? userProperties,
-    Map<String, Object?>? userPropertiesSetOnce,
-  }) {
+  /// Captures one event. Matching Journeys continue asynchronously in native code.
+  void trigger(String event, {Map<String, Object?>? properties}) {
     _assertConfigured();
-
-    final requestId = _nextRequestId();
-    final state = _TriggerOperationState();
-    _triggerOperations[requestId] = state;
-
-    unawaited(
-      _startTrigger(
-        requestId,
-        event: event,
-        properties: properties,
-        userProperties: userProperties,
-        userPropertiesSetOnce: userPropertiesSetOnce,
-      ),
-    );
-
-    return NuxieTriggerOperation(
-      requestId: requestId,
-      updates: state.updates,
-      done: state.done,
-      onCancel: () => _cancelTrigger(requestId),
-    );
+    platform.trigger(event, properties: properties);
   }
 
-  Future<TriggerTerminalUpdate> triggerOnce(
-    String event, {
-    Map<String, Object?>? properties,
-    Map<String, Object?>? userProperties,
-    Map<String, Object?>? userPropertiesSetOnce,
-    Duration? timeout,
-  }) async {
-    final operation = trigger(
-      event,
-      properties: properties,
-      userProperties: userProperties,
-      userPropertiesSetOnce: userPropertiesSetOnce,
-    );
-
-    if (timeout == null) {
-      return operation.done;
-    }
-
-    try {
-      return await operation.done.timeout(timeout);
-    } on TimeoutException {
-      await operation.cancel();
-      return const TriggerErrorUpdate(
-        TriggerError(
-          code: 'trigger_timeout',
-          message: 'Trigger operation timed out.',
-        ),
-      );
-    }
+  Future<void> dismiss() {
+    _assertConfigured();
+    return platform.dismiss();
   }
 
-  Future<void> showFlow(String flowId) {
+  Future<void> setLocaleIdentifier(String? localeIdentifier) {
     _assertConfigured();
-    return platform.showFlow(flowId);
-  }
-
-  Future<ProfileResponse> refreshProfile() {
-    _assertConfigured();
-    return platform.refreshProfile();
+    return platform.setLocaleIdentifier(localeIdentifier);
   }
 
   Future<FeatureAccess> hasFeature(
     String featureId, {
-    int? requiredBalance,
+    double requiredBalance = 1,
     String? entityId,
+    FeatureCheckPolicy policy = FeatureCheckPolicy.cacheFirst,
   }) {
     _assertConfigured();
     return platform.hasFeature(
       featureId,
       requiredBalance: requiredBalance,
       entityId: entityId,
+      policy: policy,
     );
   }
 
-  Future<FeatureAccess?> getCachedFeature(
-    String featureId, {
-    String? entityId,
-  }) {
-    _assertConfigured();
-    return platform.getCachedFeature(
-      featureId,
-      entityId: entityId,
-    );
-  }
-
-  Future<FeatureCheckResult> checkFeature(
-    String featureId, {
-    int? requiredBalance,
-    String? entityId,
-  }) {
-    _assertConfigured();
-    return platform.checkFeature(
-      featureId,
-      requiredBalance: requiredBalance,
-      entityId: entityId,
-    );
-  }
-
-  Future<FeatureCheckResult> refreshFeature(
-    String featureId, {
-    int? requiredBalance,
-    String? entityId,
-  }) {
-    _assertConfigured();
-    return platform.refreshFeature(
-      featureId,
-      requiredBalance: requiredBalance,
-      entityId: entityId,
-    );
-  }
-
-  Future<void> useFeature(
+  void useFeature(
     String featureId, {
     double amount = 1,
     String? entityId,
     Map<String, Object?>? metadata,
   }) {
     _assertConfigured();
-    return platform.useFeature(
+    platform.useFeature(
       featureId,
       amount: amount,
       entityId: entityId,
@@ -288,53 +180,14 @@ class Nuxie {
     );
   }
 
-  Future<bool> flushEvents() {
-    _assertConfigured();
-    return platform.flushEvents();
-  }
-
-  Future<int> getQueuedEventCount() {
-    _assertConfigured();
-    return platform.getQueuedEventCount();
-  }
-
-  Future<void> pauseEventQueue() {
-    _assertConfigured();
-    return platform.pauseEventQueue();
-  }
-
-  Future<void> resumeEventQueue() {
-    _assertConfigured();
-    return platform.resumeEventQueue();
-  }
-
   Future<void> shutdown() async {
     if (!_isConfigured) {
       return;
     }
-
-    await _triggerUpdatesSubscription?.cancel();
-    await _purchaseRequestsSubscription?.cancel();
-    await _restoreRequestsSubscription?.cancel();
-
-    _triggerUpdatesSubscription = null;
-    _purchaseRequestsSubscription = null;
-    _restoreRequestsSubscription = null;
-
-    for (final entry in _triggerOperations.entries.toList()) {
-      _finishTrigger(
-        entry.key,
-        entry.value,
-        const TriggerErrorUpdate(
-          TriggerError(
-            code: 'trigger_cancelled',
-            message: 'Trigger cancelled during shutdown.',
-          ),
-        ),
-      );
-    }
-    _triggerOperations.clear();
-
+    await _purchaseSubscription?.cancel();
+    await _restoreSubscription?.cancel();
+    _purchaseSubscription = null;
+    _restoreSubscription = null;
     await platform.shutdown();
     _isConfigured = false;
     if (identical(_instance, this)) {
@@ -342,260 +195,77 @@ class Nuxie {
     }
   }
 
-  void _bindPlatformStreams() {
-    _triggerUpdatesSubscription =
-        platform.triggerUpdates.listen(_handleTriggerUpdate);
-    _purchaseRequestsSubscription =
-        platform.purchaseRequests.listen(_handlePurchaseRequest);
-    _restoreRequestsSubscription =
-        platform.restoreRequests.listen(_handleRestoreRequest);
+  void _bindCommerce() {
+    _purchaseSubscription = platform.purchaseRequests.listen((request) {
+      unawaited(_handlePurchase(request));
+    });
+    _restoreSubscription = platform.restoreRequests.listen((request) {
+      unawaited(_handleRestore(request));
+    });
   }
 
-  Future<void> _startTrigger(
-    String requestId, {
-    required String event,
-    Map<String, Object?>? properties,
-    Map<String, Object?>? userProperties,
-    Map<String, Object?>? userPropertiesSetOnce,
-  }) async {
-    try {
-      await platform.startTrigger(
-        requestId,
-        event: event,
-        properties: properties,
-        userProperties: userProperties,
-        userPropertiesSetOnce: userPropertiesSetOnce,
-      );
-    } catch (error) {
-      final state = _triggerOperations[requestId];
-      if (state == null || state.finished) {
-        return;
-      }
-      _finishTrigger(
-        requestId,
-        state,
-        TriggerErrorUpdate(
-          TriggerError(
-            code: 'trigger_start_failed',
-            message: _errorMessage(error),
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _cancelTrigger(String requestId) async {
-    final state = _triggerOperations[requestId];
-    if (state == null || state.finished) {
-      return;
-    }
-
-    try {
-      await platform.cancelTrigger(requestId);
-    } catch (_) {
-      // Prefer deterministic local cancel behavior even if native cancel fails.
-    }
-
-    _finishTrigger(
-      requestId,
-      state,
-      const TriggerErrorUpdate(
-        TriggerError(
-          code: 'trigger_cancelled',
-          message: 'Trigger cancelled.',
-        ),
-      ),
-    );
-  }
-
-  void _handleTriggerUpdate(NuxieTriggerUpdateEvent event) {
-    final state = _triggerOperations[event.requestId];
-    if (state == null || state.finished) {
-      return;
-    }
-
-    state.add(event.update);
-
-    final terminal = event.isTerminal || event.update.isTerminal;
-    if (!terminal) {
-      return;
-    }
-
-    final terminalUpdate = event.update.isTerminal
-        ? event.update
-        : const TriggerErrorUpdate(
-            TriggerError(
-              code: 'invalid_terminal_update',
-              message:
-                  'Native bridge marked a non-terminal trigger update terminal.',
-            ),
-          );
-    _finishTrigger(event.requestId, state, terminalUpdate);
-  }
-
-  Future<void> _handlePurchaseRequest(NuxiePurchaseRequest request) async {
+  Future<void> _handlePurchase(NuxiePurchaseRequest request) async {
     final controller = _purchaseController;
     if (controller == null) {
-      await _completePurchaseWithFailure(
+      platform.completePurchase(
         request.requestId,
-        'purchase_controller_not_set',
+        const NuxiePurchaseResult(
+          type: NuxiePurchaseResultType.failed,
+          message: 'purchase_controller_unavailable',
+        ),
       );
       return;
     }
-
     try {
-      final result = await controller.onPurchase(request);
-      await platform.completePurchase(request.requestId, result);
+      platform.completePurchase(
+        request.requestId,
+        await controller.purchase(request),
+      );
     } catch (error) {
-      await _completePurchaseWithFailure(
+      platform.completePurchase(
         request.requestId,
-        _errorMessage(error),
-      );
-    }
-  }
-
-  Future<void> _handleRestoreRequest(NuxieRestoreRequest request) async {
-    final controller = _purchaseController;
-    if (controller == null) {
-      await _completeRestoreWithFailure(
-        request.requestId,
-        'restore_controller_not_set',
-      );
-      return;
-    }
-
-    try {
-      final result = await controller.onRestore(request);
-      await platform.completeRestore(request.requestId, result);
-    } catch (error) {
-      await _completeRestoreWithFailure(
-        request.requestId,
-        _errorMessage(error),
-      );
-    }
-  }
-
-  Future<void> _completePurchaseWithFailure(
-    String requestId,
-    String message,
-  ) async {
-    try {
-      await platform.completePurchase(
-        requestId,
         NuxiePurchaseResult(
           type: NuxiePurchaseResultType.failed,
-          message: message,
+          message: error.toString(),
         ),
       );
-    } catch (_) {
-      // Ignore follow-up completion failures.
     }
   }
 
-  Future<void> _completeRestoreWithFailure(
-    String requestId,
-    String message,
-  ) async {
-    try {
-      await platform.completeRestore(
-        requestId,
-        NuxieRestoreResult(
+  Future<void> _handleRestore(NuxieRestoreRequest request) async {
+    final controller = _purchaseController;
+    if (controller == null) {
+      platform.completeRestore(
+        request.requestId,
+        const NuxieRestoreResult(
           type: NuxieRestoreResultType.failed,
-          message: message,
+          message: 'purchase_controller_unavailable',
         ),
       );
-    } catch (_) {
-      // Ignore follow-up completion failures.
-    }
-  }
-
-  void _finishTrigger(
-    String requestId,
-    _TriggerOperationState state,
-    TriggerTerminalUpdate update,
-  ) {
-    if (state.finished) {
       return;
     }
-
-    state.finished = true;
-    state.complete(update);
-    _triggerOperations.remove(requestId);
+    try {
+      platform.completeRestore(
+        request.requestId,
+        await controller.restore(request),
+      );
+    } catch (error) {
+      platform.completeRestore(
+        request.requestId,
+        NuxieRestoreResult(
+          type: NuxieRestoreResultType.failed,
+          message: error.toString(),
+        ),
+      );
+    }
   }
 
   void _assertConfigured() {
     if (!_isConfigured) {
       throw const NuxieException(
         code: 'NOT_CONFIGURED',
-        message: 'Nuxie has not been configured. Call Nuxie.initialize first.',
+        message: 'Nuxie is not configured.',
       );
     }
-  }
-
-  String _nextRequestId() {
-    _requestCounter += 1;
-    return 'trigger-${DateTime.now().microsecondsSinceEpoch}-$_requestCounter';
-  }
-
-  static String _errorMessage(Object error) {
-    if (error is NuxieException) {
-      return error.message;
-    }
-    if (error is Exception) {
-      return error.toString();
-    }
-    return '$error';
-  }
-}
-
-abstract class NuxiePurchaseController {
-  Future<NuxiePurchaseResult> onPurchase(NuxiePurchaseRequest request);
-
-  Future<NuxieRestoreResult> onRestore(NuxieRestoreRequest request);
-}
-
-class NuxieTriggerOperation {
-  NuxieTriggerOperation({
-    required this.requestId,
-    required this.updates,
-    required this.done,
-    required Future<void> Function() onCancel,
-  }) : _onCancel = onCancel;
-
-  final String requestId;
-  final Stream<TriggerUpdate> updates;
-  final Future<TriggerTerminalUpdate> done;
-  final Future<void> Function() _onCancel;
-
-  Future<void> cancel() => _onCancel();
-}
-
-class _TriggerOperationState {
-  _TriggerOperationState()
-      : _updatesController = StreamController<TriggerUpdate>.broadcast(),
-        _doneCompleter = Completer<TriggerTerminalUpdate>();
-
-  final StreamController<TriggerUpdate> _updatesController;
-  final Completer<TriggerTerminalUpdate> _doneCompleter;
-
-  bool finished = false;
-
-  Stream<TriggerUpdate> get updates => _updatesController.stream;
-
-  Future<TriggerTerminalUpdate> get done => _doneCompleter.future;
-
-  void add(TriggerUpdate update) {
-    if (finished) {
-      return;
-    }
-    _updatesController.add(update);
-  }
-
-  void complete(TriggerTerminalUpdate update) {
-    if (_doneCompleter.isCompleted) {
-      return;
-    }
-    _doneCompleter.complete(update);
-    unawaited(_updatesController.close());
   }
 }

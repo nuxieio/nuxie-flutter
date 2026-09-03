@@ -1,8 +1,6 @@
-enum FeatureType {
-  boolean,
-  metered,
-  creditSystem,
-}
+enum FeatureCheckPolicy { cacheFirst, remote }
+
+enum FeatureType { boolean, metered, creditSystem }
 
 class FeatureAccess {
   const FeatureAccess({
@@ -14,43 +12,12 @@ class FeatureAccess {
 
   final bool allowed;
   final bool unlimited;
-  final int? balance;
+  final double? balance;
   final FeatureType type;
-
-  bool get hasAccess => allowed;
-  bool get hasBalance => unlimited || (balance ?? 0) > 0;
-}
-
-class FeatureCheckResult {
-  const FeatureCheckResult({
-    required this.customerId,
-    required this.featureId,
-    required this.requiredBalance,
-    required this.code,
-    required this.allowed,
-    required this.unlimited,
-    required this.type,
-    this.balance,
-    this.preview,
-  });
-
-  final String customerId;
-  final String featureId;
-  final int requiredBalance;
-  final String code;
-  final bool allowed;
-  final bool unlimited;
-  final int? balance;
-  final FeatureType type;
-  final Object? preview;
 }
 
 class FeatureUsageInfo {
-  const FeatureUsageInfo({
-    required this.current,
-    this.limit,
-    this.remaining,
-  });
+  const FeatureUsageInfo({required this.current, this.limit, this.remaining});
 
   final double current;
   final double? limit;
@@ -64,6 +31,7 @@ class FeatureUsageResult {
     required this.amountUsed,
     this.message,
     this.usage,
+    this.authoritativeAccess,
   });
 
   final bool success;
@@ -71,4 +39,5 @@ class FeatureUsageResult {
   final double amountUsed;
   final String? message;
   final FeatureUsageInfo? usage;
+  final FeatureAccess? authoritativeAccess;
 }

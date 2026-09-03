@@ -20,18 +20,19 @@ class NuxieFeatureBuilder extends StatefulWidget {
     required this.builder,
     this.requiredBalance,
     this.entityId,
+    this.policy = FeatureCheckPolicy.cacheFirst,
     this.autoRefresh = true,
   });
 
   final String featureId;
-  final int? requiredBalance;
+  final double? requiredBalance;
   final String? entityId;
+  final FeatureCheckPolicy policy;
   final bool autoRefresh;
   final NuxieFeatureWidgetBuilder builder;
 
   @override
-  State<NuxieFeatureBuilder> createState() =>
-      _NuxieFeatureBuilderWidgetState();
+  State<NuxieFeatureBuilder> createState() => _NuxieFeatureBuilderWidgetState();
 }
 
 class _NuxieFeatureBuilderWidgetState extends State<NuxieFeatureBuilder> {
@@ -71,7 +72,8 @@ class _NuxieFeatureBuilderWidgetState extends State<NuxieFeatureBuilder> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.featureId != widget.featureId ||
         oldWidget.requiredBalance != widget.requiredBalance ||
-        oldWidget.entityId != widget.entityId) {
+        oldWidget.entityId != widget.entityId ||
+        oldWidget.policy != widget.policy) {
       unawaited(_refresh());
     }
   }
@@ -88,8 +90,9 @@ class _NuxieFeatureBuilderWidgetState extends State<NuxieFeatureBuilder> {
     try {
       final access = await Nuxie.instance.hasFeature(
         widget.featureId,
-        requiredBalance: widget.requiredBalance,
+        requiredBalance: widget.requiredBalance ?? 1,
         entityId: widget.entityId,
+        policy: widget.policy,
       );
       if (!mounted) {
         return;

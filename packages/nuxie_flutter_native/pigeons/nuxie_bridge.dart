@@ -8,7 +8,8 @@ import 'package:pigeon/pigeon.dart';
     kotlinOut:
         'android/src/main/kotlin/io/nuxie/flutter/nativeplugin/NuxieBridge.g.kt',
     kotlinOptions: KotlinOptions(package: 'io.nuxie.flutter.nativeplugin'),
-    swiftOut: 'ios/nuxie_flutter_native/Sources/nuxie_flutter_native/NuxieBridge.g.swift',
+    swiftOut:
+        'ios/nuxie_flutter_native/Sources/nuxie_flutter_native/NuxieBridge.g.swift',
     swiftOptions: SwiftOptions(),
   ),
 )
@@ -17,63 +18,19 @@ class PConfigureRequest {
   String? wrapperVersion;
   bool? usingPurchaseController;
   String? environment;
-  String? apiEndpoint;
   String? logLevel;
   bool? enableConsoleLogging;
-  bool? enableFileLogging;
   bool? redactSensitiveData;
-  int? retryCount;
-  int? retryDelaySeconds;
-  int? eventBatchSize;
-  int? flushAt;
-  int? flushIntervalSeconds;
-  int? maxQueueSize;
-  int? maxCacheSizeBytes;
-  int? cacheExpirationSeconds;
-  int? featureCacheTtlSeconds;
   String? localeIdentifier;
-  bool? isDebugMode;
-  String? eventLinkingPolicy;
-  int? maxFlowCacheSizeBytes;
-  int? flowCacheExpirationSeconds;
-  int? maxConcurrentFlowDownloads;
-  int? flowDownloadTimeoutSeconds;
-  int? purchaseTimeoutSeconds;
-}
-
-class PTriggerRequest {
-  String? requestId;
-  String? event;
-  Map<String?, Object?>? properties;
-  Map<String?, Object?>? userProperties;
-  Map<String?, Object?>? userPropertiesSetOnce;
-}
-
-class PTriggerUpdate {
-  String? requestId;
-  String? updateKind;
-  Map<String?, Object?>? payload;
-  bool? isTerminal;
-  int? timestampMs;
+  String? purchaseHandlingMode;
+  bool? testStoreEnabled;
 }
 
 class PFeatureAccess {
   bool? allowed;
   bool? unlimited;
-  int? balance;
+  double? balance;
   String? type;
-}
-
-class PFeatureCheckResult {
-  String? customerId;
-  String? featureId;
-  int? requiredBalance;
-  String? code;
-  bool? allowed;
-  bool? unlimited;
-  int? balance;
-  String? type;
-  Object? preview;
 }
 
 class PFeatureUsageResult {
@@ -84,10 +41,7 @@ class PFeatureUsageResult {
   double? usageCurrent;
   double? usageLimit;
   double? usageRemaining;
-}
-
-class PProfileResponse {
-  Map<String?, Object?>? raw;
+  PFeatureAccess? authoritativeAccess;
 }
 
 class PFeatureAccessChangedEvent {
@@ -97,31 +51,38 @@ class PFeatureAccessChangedEvent {
   int? timestampMs;
 }
 
-class PFlowLifecycleEvent {
-  String? type;
-  String? flowId;
-  String? reason;
-  int? timestampMs;
-  Map<String?, Object?>? payload;
+class PExperienceRef {
+  String? experienceId;
+  String? experienceVersion;
+  String? journeyId;
 }
 
-class PLogEvent {
-  String? level;
-  String? message;
-  String? scope;
+class PAppAction {
+  String? name;
+  Map<String?, Object?>? payload;
+  PExperienceRef? experience;
+}
+
+class PActivityInfo {
+  int? schemaVersion;
+  String? id;
   int? timestampMs;
+  int? receivedAtMs;
+  String? name;
+  Map<String?, Object?>? properties;
 }
 
 class PPurchaseRequest {
   String? requestId;
   String? platform;
   String? productId;
+  String? storeProductId;
   String? basePlanId;
+  String? purchaseOptionId;
   String? offerId;
+  String? placementId;
   String? displayName;
   String? displayPrice;
-  double? price;
-  String? currencyCode;
   int? timestampMs;
 }
 
@@ -134,17 +95,10 @@ class PRestoreRequest {
 class PPurchaseResult {
   String? type;
   String? message;
-  String? productId;
-  String? purchaseToken;
-  String? orderId;
-  String? transactionId;
-  String? originalTransactionId;
-  String? transactionJws;
 }
 
 class PRestoreResult {
   String? type;
-  int? restoredCount;
   String? message;
 }
 
@@ -175,43 +129,22 @@ abstract class PNuxieHostApi {
   @async
   bool getIsIdentified();
 
-  @async
-  void startTrigger(PTriggerRequest request);
+  void trigger(String event, Map<String?, Object?>? properties);
 
   @async
-  void cancelTrigger(String requestId);
+  void dismiss();
 
   @async
-  void showFlow(String flowId);
-
-  @async
-  PProfileResponse refreshProfile();
+  void setLocaleIdentifier(String? localeIdentifier);
 
   @async
   PFeatureAccess hasFeature(
     String featureId,
-    int? requiredBalance,
+    double requiredBalance,
     String? entityId,
+    String policy,
   );
 
-  @async
-  PFeatureAccess? getCachedFeature(String featureId, String? entityId);
-
-  @async
-  PFeatureCheckResult checkFeature(
-    String featureId,
-    int? requiredBalance,
-    String? entityId,
-  );
-
-  @async
-  PFeatureCheckResult refreshFeature(
-    String featureId,
-    int? requiredBalance,
-    String? entityId,
-  );
-
-  @async
   void useFeature(
     String featureId,
     double amount,
@@ -228,34 +161,18 @@ abstract class PNuxieHostApi {
     Map<String?, Object?>? metadata,
   );
 
-  @async
-  bool flushEvents();
-
-  @async
-  int getQueuedEventCount();
-
-  @async
-  void pauseEventQueue();
-
-  @async
-  void resumeEventQueue();
-
-  @async
   void completePurchase(String requestId, PPurchaseResult result);
 
-  @async
   void completeRestore(String requestId, PRestoreResult result);
 }
 
 @FlutterApi()
 abstract class PNuxieFlutterApi {
-  void onTriggerUpdate(PTriggerUpdate event);
-
   void onFeatureAccessChanged(PFeatureAccessChangedEvent event);
 
-  void onFlowLifecycle(PFlowLifecycleEvent event);
+  void onActivity(PActivityInfo activity);
 
-  void onLog(PLogEvent event);
+  void onAppAction(PAppAction action);
 
   void onPurchaseRequest(PPurchaseRequest request);
 

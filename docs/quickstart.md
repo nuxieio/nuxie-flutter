@@ -1,120 +1,65 @@
 # Quickstart
 
-This guide gets Nuxie running in a Flutter app with identity, trigger handling, and feature checks.
-
-## 1. Add Dependency
-
-```yaml
-dependencies:
-  nuxie_flutter:
-    path: ../nuxie_flutter
-```
-
-## 2. Initialize Once
+## Configure
 
 ```dart
-import 'package:nuxie_flutter/nuxie_flutter.dart';
-
-Future<void> configureNuxie() async {
-  await Nuxie.initialize(
-    apiKey: 'NX_YOUR_API_KEY',
-    options: const NuxieOptions(
-      environment: NuxieEnvironment.production,
-    ),
-  );
-}
+final nuxie = await Nuxie.initialize(
+  apiKey: 'NX_PROD_...',
+  options: const NuxieOptions(
+    environment: NuxieEnvironment.production,
+  ),
+);
 ```
 
-Call this early in app startup before using `Nuxie.instance`.
-
-If native project setup is incomplete, see [`native-setup.md`](native-setup.md)
-before continuing.
-
-## 3. Identify User
+## Identify
 
 ```dart
-final nuxie = Nuxie.instance;
 await nuxie.identify(
   'user_123',
-  userProperties: const {
-    'plan': 'pro',
-    'region': 'us',
-  },
+  userProperties: <String, Object?>{'plan': 'pro'},
 );
 ```
 
-Reset when needed:
+## Capture an event
 
 ```dart
-await nuxie.reset();
+nuxie.trigger(
+  'upgrade_tapped',
+  properties: <String, Object?>{'source': 'settings'},
+);
 ```
 
-## 4. Trigger Journeys
+The call returns immediately. The native Journey runtime evaluates the event
+in its durable ordered lane.
 
-Use full streaming mode when you want progressive updates:
+## Observe native output
 
 ```dart
-final op = nuxie.trigger('paywall_tapped');
-
-final sub = op.updates.listen((update) {
-  // non-terminal and terminal updates
+nuxie.activities.listen((event) {
+  analytics.track(event.name, event.properties);
 });
 
-final terminal = await op.done;
-await sub.cancel();
+nuxie.appActions.listen((action) {
+  appActions.handle(action.name, action.payload);
+});
 ```
 
-Use terminal-only mode for simple flows:
+## Check and use a Feature
 
 ```dart
-final terminal = await nuxie.triggerOnce(
-  'paywall_tapped',
-  timeout: const Duration(seconds: 10),
+final access = await nuxie.hasFeature(
+  'ai_credits',
+  requiredBalance: 2.5,
+  policy: FeatureCheckPolicy.remote,
 );
-```
-
-## 5. Show a Flow
-
-```dart
-await nuxie.showFlow('flow_123');
-```
-
-Or embed in UI:
-
-```dart
-const NuxieFlowView(flowId: 'flow_123');
-```
-
-## 6. Feature Access and Usage
-
-```dart
-final access = await nuxie.hasFeature('premium_feature');
 
 if (access.allowed) {
-  final usage = await nuxie.useFeatureAndWait(
-    'premium_feature',
-    amount: 1,
-  );
+  await nuxie.useFeatureAndWait('ai_credits', amount: 2.5);
 }
 ```
 
-## 7. Queue Operations
-
-```dart
-final queued = await nuxie.getQueuedEventCount();
-final flushed = await nuxie.flushEvents();
-```
-
-## 8. Shutdown (optional)
+## Shut down
 
 ```dart
 await nuxie.shutdown();
 ```
-
-For production apps, this is typically only needed in explicit teardown/testing contexts.
-
-## Next Steps
-
-- Add Riverpod/Bloc glue with [`adapters.md`](adapters.md) if needed.
-- Review common setup/runtime errors in [`troubleshooting.md`](troubleshooting.md).
-- See complete API surface in [`api-reference.md`](api-reference.md).
