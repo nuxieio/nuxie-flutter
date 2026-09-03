@@ -45,7 +45,7 @@ apply plugin: "kotlin-android"
 
 android {
     namespace = "io.nuxie.flutter.nativeplugin"
-    compileSdk = 34
+    compileSdk = 36
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -62,7 +62,7 @@ android {
     }
 
     defaultConfig {
-        minSdk = 21
+        minSdk = 23
     }
 }
 
@@ -72,9 +72,5 @@ dependencies {
     }
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
-
-    if (project.findProject(":nuxie-android") != null) {
-        implementation(project(":nuxie-android"))
-    }
+    implementation("ai.nuxie:nuxie-android:0.1.0")
 }

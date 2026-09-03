@@ -9,6 +9,7 @@ class FeatureAccessCubit extends Cubit<FeatureAccess?> {
     this._featureId, {
     this.requiredBalance,
     this.entityId,
+    this.policy = FeatureCheckPolicy.cacheFirst,
     this.autoRefresh = true,
   }) : super(null) {
     _subscription = _nuxie.featureAccessChanges.listen((event) {
@@ -24,8 +25,9 @@ class FeatureAccessCubit extends Cubit<FeatureAccess?> {
 
   final Nuxie _nuxie;
   final String _featureId;
-  final int? requiredBalance;
+  final double? requiredBalance;
   final String? entityId;
+  final FeatureCheckPolicy policy;
   final bool autoRefresh;
 
   StreamSubscription<FeatureAccessChangedEvent>? _subscription;
@@ -33,8 +35,9 @@ class FeatureAccessCubit extends Cubit<FeatureAccess?> {
   Future<void> refresh() async {
     final result = await _nuxie.hasFeature(
       _featureId,
-      requiredBalance: requiredBalance,
+      requiredBalance: requiredBalance ?? 1,
       entityId: entityId,
+      policy: policy,
     );
     emit(result);
   }

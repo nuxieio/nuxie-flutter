@@ -5,248 +5,126 @@ import 'package:nuxie_flutter/nuxie_flutter.dart';
 import 'package:nuxie_flutter_bloc/nuxie_flutter_bloc.dart';
 
 void main() {
-  late _FakePlatform platform;
-
-  setUp(() {
-    platform = _FakePlatform();
-  });
-
-  tearDown(() async {
-    try {
-      await Nuxie.instance.shutdown();
-    } catch (_) {
-      // ignore when not initialized
-    }
-    await platform.dispose();
-  });
-
-  test('FeatureAccessCubit refreshes and reacts to native feature events',
+  test('FeatureAccessCubit uses policy-aware fractional Feature access',
       () async {
-    await Nuxie.initialize(
+    final platform = _FeaturePlatform();
+    final nuxie = await Nuxie.initialize(
       apiKey: 'NX_TEST',
       platformOverride: platform,
     );
-
     final cubit = FeatureAccessCubit(
-      Nuxie.instance,
-      'pro_feature',
-    );
-    addTearDown(cubit.close);
-
-    await Future<void>.delayed(const Duration(milliseconds: 5));
-    expect(
-      cubit.state,
-      const FeatureAccess(
-        allowed: true,
-        unlimited: false,
-        balance: 5,
-        type: FeatureType.metered,
-      ),
+      nuxie,
+      'credits',
+      requiredBalance: 2.5,
+      policy: FeatureCheckPolicy.remote,
     );
 
-    platform.emitFeatureChange(
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    expect(cubit.state?.balance, 3.5);
+    expect(platform.policy, FeatureCheckPolicy.remote);
+    expect(platform.requiredBalance, 2.5);
+
+    platform.emit(
       const FeatureAccessChangedEvent(
-        featureId: 'pro_feature',
+        featureId: 'credits',
         to: FeatureAccess(
-          allowed: false,
+          allowed: true,
           unlimited: false,
-          balance: 0,
-          type: FeatureType.boolean,
+          balance: 2,
+          type: FeatureType.metered,
         ),
+        timestampMs: 1,
       ),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 5));
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    expect(cubit.state?.balance, 2);
 
-    expect(
-      cubit.state,
-      const FeatureAccess(
-        allowed: false,
-        unlimited: false,
-        balance: 0,
-        type: FeatureType.boolean,
-      ),
-    );
+    await cubit.close();
+    await nuxie.shutdown();
+    await platform.close();
   });
 }
 
-class _FakePlatform extends NuxieFlutterPlatform {
-  final StreamController<FeatureAccessChangedEvent> _featureChanges =
-      StreamController<FeatureAccessChangedEvent>.broadcast();
+class _FeaturePlatform extends NuxieFlutterPlatform {
+  final _changes = StreamController<FeatureAccessChangedEvent>.broadcast();
+  FeatureCheckPolicy? policy;
+  double? requiredBalance;
 
   @override
-  Stream<FeatureAccessChangedEvent> get featureAccessChanges =>
-      _featureChanges.stream;
-
+  Stream<FeatureAccessChangedEvent> get featureAccessChanges => _changes.stream;
   @override
-  Stream<NuxieFlowLifecycleEvent> get flowLifecycleEvents =>
-      const Stream<NuxieFlowLifecycleEvent>.empty();
-
+  Stream<NuxieActivityInfo> get activities =>
+      const Stream<NuxieActivityInfo>.empty();
   @override
-  Stream<NuxieLogEvent> get logEvents => const Stream<NuxieLogEvent>.empty();
-
-  @override
-  Stream<NuxieTriggerUpdateEvent> get triggerUpdates =>
-      const Stream<NuxieTriggerUpdateEvent>.empty();
-
+  Stream<AppAction> get appActions => const Stream<AppAction>.empty();
   @override
   Stream<NuxiePurchaseRequest> get purchaseRequests =>
       const Stream<NuxiePurchaseRequest>.empty();
-
   @override
   Stream<NuxieRestoreRequest> get restoreRequests =>
       const Stream<NuxieRestoreRequest>.empty();
 
-  void emitFeatureChange(FeatureAccessChangedEvent event) {
-    _featureChanges.add(event);
-  }
-
-  Future<void> dispose() => _featureChanges.close();
+  @override
+  Future<void> configure(
+      {required String apiKey,
+      NuxieOptions? options,
+      required bool usingPurchaseController,
+      required String wrapperVersion}) async {}
+  @override
+  Future<void> shutdown() async {}
+  @override
+  Future<void> identify(String distinctId,
+      {Map<String, Object?>? userProperties,
+      Map<String, Object?>? userPropertiesSetOnce}) async {}
+  @override
+  Future<void> reset({bool keepAnonymousId = false}) async {}
+  @override
+  Future<String> getDistinctId() async => 'distinct';
+  @override
+  Future<String> getAnonymousId() async => 'anonymous';
+  @override
+  Future<bool> getIsIdentified() async => true;
+  @override
+  void trigger(String event, {Map<String, Object?>? properties}) {}
+  @override
+  Future<void> dismiss() async {}
+  @override
+  Future<void> setLocaleIdentifier(String? localeIdentifier) async {}
 
   @override
-  Future<FeatureAccess> hasFeature(
-    String featureId, {
-    int? requiredBalance,
-    String? entityId,
-  }) async {
+  Future<FeatureAccess> hasFeature(String featureId,
+      {double requiredBalance = 1,
+      String? entityId,
+      FeatureCheckPolicy policy = FeatureCheckPolicy.cacheFirst}) async {
+    this.requiredBalance = requiredBalance;
+    this.policy = policy;
     return const FeatureAccess(
       allowed: true,
       unlimited: false,
-      balance: 5,
+      balance: 3.5,
       type: FeatureType.metered,
     );
   }
 
   @override
-  Future<void> configure({
-    required String apiKey,
-    NuxieOptions? options,
-    required bool usingPurchaseController,
-    required String wrapperVersion,
-  }) async {}
-
+  void useFeature(String featureId,
+      {double amount = 1, String? entityId, Map<String, Object?>? metadata}) {}
   @override
-  Future<void> shutdown() async {}
-
-  @override
-  Future<void> identify(
-    String distinctId, {
-    Map<String, Object?>? userProperties,
-    Map<String, Object?>? userPropertiesSetOnce,
-  }) async {}
-
-  @override
-  Future<void> reset({bool keepAnonymousId = true}) async {}
-
-  @override
-  Future<String> getDistinctId() async => 'distinct';
-
-  @override
-  Future<String> getAnonymousId() async => 'anon';
-
-  @override
-  Future<bool> getIsIdentified() async => true;
-
-  @override
-  Future<void> startTrigger(
-    String requestId, {
-    required String event,
-    Map<String, Object?>? properties,
-    Map<String, Object?>? userProperties,
-    Map<String, Object?>? userPropertiesSetOnce,
-  }) async {}
-
-  @override
-  Future<void> cancelTrigger(String requestId) async {}
-
-  @override
-  Future<void> showFlow(String flowId) async {}
-
-  @override
-  Future<ProfileResponse> refreshProfile() async =>
-      const ProfileResponse(raw: <String, Object?>{});
-
-  @override
-  Future<FeatureAccess?> getCachedFeature(
-    String featureId, {
-    String? entityId,
-  }) async =>
-      null;
-
-  @override
-  Future<FeatureCheckResult> checkFeature(
-    String featureId, {
-    int? requiredBalance,
-    String? entityId,
-  }) async =>
-      const FeatureCheckResult(
-        customerId: 'c_1',
-        featureId: 'f_1',
-        requiredBalance: 1,
-        code: 'ok',
-        allowed: true,
-        unlimited: true,
-        type: FeatureType.boolean,
-      );
-
-  @override
-  Future<FeatureCheckResult> refreshFeature(
-    String featureId, {
-    int? requiredBalance,
-    String? entityId,
-  }) async =>
-      const FeatureCheckResult(
-        customerId: 'c_1',
-        featureId: 'f_1',
-        requiredBalance: 1,
-        code: 'ok',
-        allowed: true,
-        unlimited: true,
-        type: FeatureType.boolean,
-      );
-
-  @override
-  Future<void> useFeature(
-    String featureId, {
-    double amount = 1,
-    String? entityId,
-    Map<String, Object?>? metadata,
-  }) async {}
-
-  @override
-  Future<FeatureUsageResult> useFeatureAndWait(
-    String featureId, {
-    double amount = 1,
-    String? entityId,
-    bool setUsage = false,
-    Map<String, Object?>? metadata,
-  }) async =>
+  Future<FeatureUsageResult> useFeatureAndWait(String featureId,
+          {double amount = 1,
+          String? entityId,
+          bool setUsage = false,
+          Map<String, Object?>? metadata}) async =>
       const FeatureUsageResult(
         success: true,
-        featureId: 'f_1',
+        featureId: 'credits',
         amountUsed: 1,
       );
-
   @override
-  Future<bool> flushEvents() async => true;
-
+  void completePurchase(String requestId, NuxiePurchaseResult result) {}
   @override
-  Future<int> getQueuedEventCount() async => 0;
+  void completeRestore(String requestId, NuxieRestoreResult result) {}
 
-  @override
-  Future<void> pauseEventQueue() async {}
-
-  @override
-  Future<void> resumeEventQueue() async {}
-
-  @override
-  Future<void> completePurchase(
-    String requestId,
-    NuxiePurchaseResult result,
-  ) async {}
-
-  @override
-  Future<void> completeRestore(
-    String requestId,
-    NuxieRestoreResult result,
-  ) async {}
+  void emit(FeatureAccessChangedEvent event) => _changes.add(event);
+  Future<void> close() => _changes.close();
 }

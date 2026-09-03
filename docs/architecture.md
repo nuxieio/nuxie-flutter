@@ -1,66 +1,20 @@
 # Architecture
 
-Nuxie Flutter is a native-first federated plugin. Dart does not re-implement
-runtime business logic; it forwards typed requests to the native SDKs.
+The wrapper is deliberately thin:
 
-## Package Layout
+1. `nuxie_flutter` owns Dart ergonomics and the singleton lifecycle.
+2. `nuxie_flutter_platform_interface` defines portable scalar models.
+3. `nuxie_flutter_native` sends those models through a generated Pigeon
+   channel.
+4. Swift and Kotlin translate directly to their native SDK counterparts.
+5. Native SDKs own Journey state, presentation, profile synchronization,
+   event persistence, Feature authority, and commerce execution.
 
-- `packages/nuxie_flutter`
-  - App-facing API, singleton lifecycle, widgets (`NuxieFlowView`,
-    `NuxieFeatureBuilder`, `NuxieBuilder`)
-- `packages/nuxie_flutter_platform_interface`
-  - Shared models, errors, event types, and platform contract
-- `packages/nuxie_flutter_native`
-  - Endorsed iOS/Android implementation and Pigeon bridge code
-- `packages/nuxie_flutter_riverpod`
-  - Optional Riverpod adapter
-- `packages/nuxie_flutter_bloc`
-  - Optional Bloc adapter
-- `packages/mobile_wrapper_contract`
-  - Shared mobile wrapper fixtures and contract normalization used by Flutter
-    and other mobile wrappers
+No wrapper layer interprets Journey programs, calls Nuxie HTTP endpoints, or
+maintains a second decision model. The generated channel is the compile-time
+boundary: changing it regenerates Dart, Swift, and Kotlin together.
 
-## Request Path
-
-1. App calls `Nuxie.instance` API from Dart.
-2. `nuxie_flutter` invokes `NuxieFlutterPlatform` methods.
-3. `nuxie_flutter_native` maps platform interface types to generated Pigeon
-   types.
-4. Native Swift/Kotlin plugin forwards into native Nuxie SDKs.
-5. Native SDKs emit updates and results back through event channels.
-6. Dart maps updates into typed `TriggerUpdate`, `FeatureAccessChangedEvent`,
-   and other model classes.
-
-## Trigger Operation Model
-
-- `trigger(...)` returns `NuxieTriggerOperation`.
-- `updates` exposes progressive update events.
-- `done` resolves once on the terminal update.
-- `cancel()` maps to native trigger cancellation.
-
-Terminal handling is centralized in Dart only to provide ergonomic stream/future
-coordination. Decision and entitlement semantics remain native-owned.
-
-## Purchase Bridge
-
-When a purchase controller is attached:
-
-- Native emits purchase/restore request events.
-- Dart delegates to `NuxiePurchaseController`.
-- Dart sends completion payloads back to native through
-  `completePurchase/completeRestore`.
-
-This keeps billing-provider specifics in app code while preserving native flow
-control.
-
-## Why `mobile_wrapper_contract` Is a Package
-
-Shared fixtures and contract shape rules live in
-`packages/mobile_wrapper_contract` (not `specs/`) because they are executable
-test assets:
-
-- consumed by Dart tests
-- versioned with implementation changes
-- reusable by multiple wrapper implementations
-
-`specs/` remains design documentation; contract fixtures remain code artifacts.
+Public events are fire-and-forget. Observable output arrives through typed
+Feature, activity, App Action, and commerce streams. App-owned purchase
+controllers complete the same request ID emitted by native code, so completion
+cannot drift from the original request.

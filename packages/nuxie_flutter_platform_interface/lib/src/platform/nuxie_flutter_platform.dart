@@ -1,18 +1,15 @@
-import 'dart:async';
-
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import '../events/nuxie_events.dart';
 import '../models/feature_models.dart';
+import '../models/journey_models.dart';
 import '../models/nuxie_options.dart';
-import '../models/profile_models.dart';
 import '../models/purchase_models.dart';
 
 abstract class NuxieFlutterPlatform extends PlatformInterface {
   NuxieFlutterPlatform() : super(token: _token);
 
   static final Object _token = Object();
-
   static NuxieFlutterPlatform _instance = _UnsupportedNuxieFlutterPlatform();
 
   static NuxieFlutterPlatform get instance => _instance;
@@ -23,15 +20,9 @@ abstract class NuxieFlutterPlatform extends PlatformInterface {
   }
 
   Stream<FeatureAccessChangedEvent> get featureAccessChanges;
-
-  Stream<NuxieFlowLifecycleEvent> get flowLifecycleEvents;
-
-  Stream<NuxieLogEvent> get logEvents;
-
-  Stream<NuxieTriggerUpdateEvent> get triggerUpdates;
-
+  Stream<NuxieActivityInfo> get activities;
+  Stream<AppAction> get appActions;
   Stream<NuxiePurchaseRequest> get purchaseRequests;
-
   Stream<NuxieRestoreRequest> get restoreRequests;
 
   Future<void> configure({
@@ -49,52 +40,24 @@ abstract class NuxieFlutterPlatform extends PlatformInterface {
     Map<String, Object?>? userPropertiesSetOnce,
   });
 
-  Future<void> reset({bool keepAnonymousId = true});
-
+  Future<void> reset({bool keepAnonymousId = false});
   Future<String> getDistinctId();
-
   Future<String> getAnonymousId();
-
   Future<bool> getIsIdentified();
 
-  Future<void> startTrigger(
-    String requestId, {
-    required String event,
-    Map<String, Object?>? properties,
-    Map<String, Object?>? userProperties,
-    Map<String, Object?>? userPropertiesSetOnce,
-  });
+  void trigger(String event, {Map<String, Object?>? properties});
 
-  Future<void> cancelTrigger(String requestId);
-
-  Future<void> showFlow(String flowId);
-
-  Future<ProfileResponse> refreshProfile();
+  Future<void> dismiss();
+  Future<void> setLocaleIdentifier(String? localeIdentifier);
 
   Future<FeatureAccess> hasFeature(
     String featureId, {
-    int? requiredBalance,
+    double requiredBalance = 1,
     String? entityId,
+    FeatureCheckPolicy policy = FeatureCheckPolicy.cacheFirst,
   });
 
-  Future<FeatureAccess?> getCachedFeature(
-    String featureId, {
-    String? entityId,
-  });
-
-  Future<FeatureCheckResult> checkFeature(
-    String featureId, {
-    int? requiredBalance,
-    String? entityId,
-  });
-
-  Future<FeatureCheckResult> refreshFeature(
-    String featureId, {
-    int? requiredBalance,
-    String? entityId,
-  });
-
-  Future<void> useFeature(
+  void useFeature(
     String featureId, {
     double amount = 1,
     String? entityId,
@@ -109,48 +72,25 @@ abstract class NuxieFlutterPlatform extends PlatformInterface {
     Map<String, Object?>? metadata,
   });
 
-  Future<bool> flushEvents();
-
-  Future<int> getQueuedEventCount();
-
-  Future<void> pauseEventQueue();
-
-  Future<void> resumeEventQueue();
-
-  Future<void> completePurchase(
-    String requestId,
-    NuxiePurchaseResult result,
-  );
-
-  Future<void> completeRestore(
-    String requestId,
-    NuxieRestoreResult result,
-  );
+  void completePurchase(String requestId, NuxiePurchaseResult result);
+  void completeRestore(String requestId, NuxieRestoreResult result);
 }
 
 class _UnsupportedNuxieFlutterPlatform extends NuxieFlutterPlatform {
-  _UnsupportedNuxieFlutterPlatform() : super();
-
-  Never _unimplemented() {
-    throw UnimplementedError(
-      'No nuxie_flutter platform implementation has been registered.',
-    );
-  }
+  Never _unsupported() => throw UnimplementedError(
+        'No nuxie_flutter platform implementation has been registered.',
+      );
 
   @override
   Stream<FeatureAccessChangedEvent> get featureAccessChanges =>
       const Stream<FeatureAccessChangedEvent>.empty();
 
   @override
-  Stream<NuxieFlowLifecycleEvent> get flowLifecycleEvents =>
-      const Stream<NuxieFlowLifecycleEvent>.empty();
+  Stream<NuxieActivityInfo> get activities =>
+      const Stream<NuxieActivityInfo>.empty();
 
   @override
-  Stream<NuxieLogEvent> get logEvents => const Stream<NuxieLogEvent>.empty();
-
-  @override
-  Stream<NuxieTriggerUpdateEvent> get triggerUpdates =>
-      const Stream<NuxieTriggerUpdateEvent>.empty();
+  Stream<AppAction> get appActions => const Stream<AppAction>.empty();
 
   @override
   Stream<NuxiePurchaseRequest> get purchaseRequests =>
@@ -161,38 +101,16 @@ class _UnsupportedNuxieFlutterPlatform extends NuxieFlutterPlatform {
       const Stream<NuxieRestoreRequest>.empty();
 
   @override
-  Future<void> cancelTrigger(String requestId) async => _unimplemented();
-
-  @override
-  Future<FeatureCheckResult> checkFeature(
-    String featureId, {
-    int? requiredBalance,
-    String? entityId,
-  }) async =>
-      _unimplemented();
-
-  @override
-  Future<void> completePurchase(
-    String requestId,
-    NuxiePurchaseResult result,
-  ) async =>
-      _unimplemented();
-
-  @override
-  Future<void> completeRestore(
-    String requestId,
-    NuxieRestoreResult result,
-  ) async =>
-      _unimplemented();
-
-  @override
   Future<void> configure({
     required String apiKey,
     NuxieOptions? options,
     required bool usingPurchaseController,
     required String wrapperVersion,
   }) async =>
-      _unimplemented();
+      _unsupported();
+
+  @override
+  Future<void> shutdown() async => _unsupported();
 
   @override
   Future<void> identify(
@@ -200,52 +118,48 @@ class _UnsupportedNuxieFlutterPlatform extends NuxieFlutterPlatform {
     Map<String, Object?>? userProperties,
     Map<String, Object?>? userPropertiesSetOnce,
   }) async =>
-      _unimplemented();
+      _unsupported();
 
   @override
-  Future<void> pauseEventQueue() async => _unimplemented();
+  Future<void> reset({bool keepAnonymousId = false}) async => _unsupported();
 
   @override
-  Future<void> reset({bool keepAnonymousId = true}) async => _unimplemented();
+  Future<String> getDistinctId() async => _unsupported();
 
   @override
-  Future<void> resumeEventQueue() async => _unimplemented();
+  Future<String> getAnonymousId() async => _unsupported();
 
   @override
-  Future<ProfileResponse> refreshProfile() async => _unimplemented();
+  Future<bool> getIsIdentified() async => _unsupported();
 
   @override
-  Future<FeatureCheckResult> refreshFeature(
+  void trigger(String event, {Map<String, Object?>? properties}) =>
+      _unsupported();
+
+  @override
+  Future<void> dismiss() async => _unsupported();
+
+  @override
+  Future<void> setLocaleIdentifier(String? localeIdentifier) async =>
+      _unsupported();
+
+  @override
+  Future<FeatureAccess> hasFeature(
     String featureId, {
-    int? requiredBalance,
+    double requiredBalance = 1,
     String? entityId,
+    FeatureCheckPolicy policy = FeatureCheckPolicy.cacheFirst,
   }) async =>
-      _unimplemented();
+      _unsupported();
 
   @override
-  Future<void> showFlow(String flowId) async => _unimplemented();
-
-  @override
-  Future<void> shutdown() async => _unimplemented();
-
-  @override
-  Future<void> startTrigger(
-    String requestId, {
-    required String event,
-    Map<String, Object?>? properties,
-    Map<String, Object?>? userProperties,
-    Map<String, Object?>? userPropertiesSetOnce,
-  }) async =>
-      _unimplemented();
-
-  @override
-  Future<void> useFeature(
+  void useFeature(
     String featureId, {
     double amount = 1,
     String? entityId,
     Map<String, Object?>? metadata,
-  }) async =>
-      _unimplemented();
+  }) =>
+      _unsupported();
 
   @override
   Future<FeatureUsageResult> useFeatureAndWait(
@@ -255,35 +169,13 @@ class _UnsupportedNuxieFlutterPlatform extends NuxieFlutterPlatform {
     bool setUsage = false,
     Map<String, Object?>? metadata,
   }) async =>
-      _unimplemented();
+      _unsupported();
 
   @override
-  Future<bool> flushEvents() async => _unimplemented();
+  void completePurchase(String requestId, NuxiePurchaseResult result) =>
+      _unsupported();
 
   @override
-  Future<String> getAnonymousId() async => _unimplemented();
-
-  @override
-  Future<FeatureAccess?> getCachedFeature(
-    String featureId, {
-    String? entityId,
-  }) async =>
-      _unimplemented();
-
-  @override
-  Future<String> getDistinctId() async => _unimplemented();
-
-  @override
-  Future<bool> getIsIdentified() async => _unimplemented();
-
-  @override
-  Future<int> getQueuedEventCount() async => _unimplemented();
-
-  @override
-  Future<FeatureAccess> hasFeature(
-    String featureId, {
-    int? requiredBalance,
-    String? entityId,
-  }) async =>
-      _unimplemented();
+  void completeRestore(String requestId, NuxieRestoreResult result) =>
+      _unsupported();
 }

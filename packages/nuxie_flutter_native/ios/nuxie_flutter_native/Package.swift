@@ -10,7 +10,7 @@ let package = Package(
     .library(name: "nuxie_flutter_native", targets: ["nuxie_flutter_native"])
   ],
   dependencies: [
-    .package(url: "https://github.com/nuxieai/nuxie-ios.git", branch: "main")
+    .package(url: "https://github.com/nuxieai/nuxie-ios.git", exact: "0.1.0")
   ],
   targets: [
     .target(
