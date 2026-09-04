@@ -7,14 +7,21 @@ steps:
       set -euo pipefail
       export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
       export ANDROID_SDK_ROOT="$ANDROID_HOME"
+      flutter_launcher="$(realpath "$(command -v flutter)")"
+      export FLUTTER_ROOT="$(cd "$(dirname "$flutter_launcher")/.." && pwd)"
+      flutter_tool=(
+        "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
+        "$FLUTTER_ROOT/bin/cache/flutter_tools.snapshot"
+        --no-version-check
+      )
       for package in packages/*; do
         [[ -f "$package/pubspec.yaml" ]] || continue
         (
           cd "$package"
-          flutter --no-version-check pub get
-          flutter --no-version-check analyze
+          "${flutter_tool[@]}" pub get
+          "${flutter_tool[@]}" analyze
           if [[ -d test ]]; then
-            flutter --no-version-check test
+            "${flutter_tool[@]}" test
           fi
         )
       done
