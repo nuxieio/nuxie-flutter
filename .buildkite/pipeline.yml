@@ -11,10 +11,10 @@ steps:
         [[ -f "$package/pubspec.yaml" ]] || continue
         (
           cd "$package"
-          flutter pub get
-          flutter analyze
+          flutter --no-version-check pub get
+          flutter --no-version-check analyze
           if [[ -d test ]]; then
-            flutter test
+            flutter --no-version-check test
           fi
         )
       done
