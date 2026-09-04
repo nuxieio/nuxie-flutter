@@ -8,19 +8,12 @@ steps:
       export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
       export ANDROID_SDK_ROOT="$ANDROID_HOME"
       flutter_launcher="$(realpath "$(command -v flutter)")"
-      export FLUTTER_ROOT="$(cd "$(dirname "$flutter_launcher")/.." && pwd)"
-      flutter_tool_config="$(mktemp "${TMPDIR:-/tmp}/nuxie-flutter-tool.XXXXXX")"
-      trap 'unlink "$flutter_tool_config"' EXIT
-      sed \
-        "s#\"rootUri\": \"../\"#\"rootUri\": \"file://$FLUTTER_ROOT/packages/flutter_tools\"#" \
-        "$FLUTTER_ROOT/packages/flutter_tools/.dart_tool/package_config.json" \
-        > "$flutter_tool_config"
-      flutter_tool=(
-        "$FLUTTER_ROOT/bin/cache/dart-sdk/bin/dart"
-        --packages="$flutter_tool_config"
-        "$FLUTTER_ROOT/bin/cache/flutter_tools.snapshot"
-        --no-version-check
-      )
+      installed_flutter_root="$(cd "$(dirname "$flutter_launcher")/.." && pwd)"
+      flutter_sdk_parent="$(mktemp -d "${TMPDIR:-/tmp}/nuxie-flutter-sdk.XXXXXX")"
+      trap 'rm -rf "$flutter_sdk_parent"' EXIT
+      cp -cR "$installed_flutter_root" "$flutter_sdk_parent/flutter"
+      export FLUTTER_ROOT="$flutter_sdk_parent/flutter"
+      flutter_tool=("$FLUTTER_ROOT/bin/flutter" --no-version-check)
       for package in packages/*; do
         [[ -f "$package/pubspec.yaml" ]] || continue
         (
